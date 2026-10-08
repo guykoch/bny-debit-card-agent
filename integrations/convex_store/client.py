@@ -6,6 +6,8 @@ Every call carries DEMO_SERVER_SECRET; the Convex functions refuse calls
 without it once the same value is set in the Convex dashboard.
 """
 
+from __future__ import annotations
+
 import json
 import urllib.error
 import urllib.request

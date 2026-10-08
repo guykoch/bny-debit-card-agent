@@ -19,6 +19,8 @@ code does around the model - which is the part that must never vary:
 Whether GPT-5.4 asks the right questions is a separate, live evaluation.
 """
 
+from __future__ import annotations
+
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ["DCA_STORE"] = "memory"      # never touch the shared demo database

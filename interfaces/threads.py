@@ -9,6 +9,8 @@ Both store the same JSON snapshot produced by Conversation.snapshot() /
 GptConversation.snapshot().
 """
 
+from __future__ import annotations
+
 import json
 
 from config import settings

@@ -28,6 +28,8 @@ Either way the audit row carries `entitlement_checked_by`, so the record never
 implies we verified something we did not.
 """
 
+from __future__ import annotations
+
 from config import settings
 from core import audit, cards, schemas
 from core.errors import AgentError, BadRequest, NotEntitled

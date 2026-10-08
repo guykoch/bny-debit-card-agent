@@ -13,6 +13,8 @@ Run it locally:
     curl -s localhost:8080 -d '{"advisor_id":"ADV-1234","utterance":"lock Jane Miller card"}'
 """
 
+from __future__ import annotations
+
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

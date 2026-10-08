@@ -8,6 +8,8 @@ Loaded once, at import. If you edit a CSV while something is running, restart
 it.
 """
 
+from __future__ import annotations
+
 import csv
 import os
 

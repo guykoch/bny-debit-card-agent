@@ -6,6 +6,8 @@ Default state = integrations/mock/data/cards.csv (also saved in Convex's
 travel notices, flags, conversations and the audit.
 """
 
+from __future__ import annotations
+
 from config import settings
 
 

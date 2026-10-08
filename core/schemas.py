@@ -6,6 +6,8 @@ anyway for two reasons: the prototype runs without MCP installed, and a
 reviewer can see the check rather than taking it on trust.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from typing import Any

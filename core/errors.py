@@ -6,6 +6,8 @@ Rule: never explain WHY an entitlement failed. Saying "that client belongs to
 another advisor" leaks the existence of the client.
 """
 
+from __future__ import annotations
+
 
 class AgentError(Exception):
     def __init__(self, code: str, message: str):

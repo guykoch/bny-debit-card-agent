@@ -6,6 +6,8 @@ action. This file only holds what differs between them, which is why adding a
 seventh action later is a small change.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Callable, Optional

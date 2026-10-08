@@ -5,6 +5,8 @@ Everything is mocked. No model, no network, no API key. The point is the shape
 of the interaction and the guardrails, not language understanding.
 """
 
+from __future__ import annotations
+
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

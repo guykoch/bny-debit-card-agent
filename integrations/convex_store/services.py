@@ -7,6 +7,8 @@ Implements the CardSystem interface in integrations/ports.py, so nothing in
 core/ knows or cares where the cards live.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import random

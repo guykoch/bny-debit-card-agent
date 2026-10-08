@@ -32,6 +32,8 @@ WHAT STAYS PLAIN CODE (identical to the keyword runtime)
   reply to out-of-scope messages are fixed text from code.
 """
 
+from __future__ import annotations
+
 import json
 import re
 from datetime import date

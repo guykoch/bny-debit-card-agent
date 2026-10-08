@@ -9,6 +9,8 @@ works if card rendering is unavailable.
 Keep this vocabulary small. Three card kinds cover all six actions.
 """
 
+from __future__ import annotations
+
 from typing import Optional
 
 

@@ -8,6 +8,8 @@ does not exist, two skills claiming the same tool, an action with no skill, or
 a trigger that silently shadows another skill. These tests catch all four.
 """
 
+from __future__ import annotations
+
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

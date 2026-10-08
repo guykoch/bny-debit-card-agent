@@ -7,6 +7,8 @@ change in memory, so a demo can run the whole flow and show a card panel
 updating; restarting resets everything to what the CSVs say.
 """
 
+from __future__ import annotations
+
 import copy
 from typing import Optional
 

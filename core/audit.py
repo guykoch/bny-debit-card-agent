@@ -10,6 +10,8 @@ BNY integration note: replace `_sink` with a writer that posts to Persistent
 Logging. Keep the field names; they are what a reviewer will ask for.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 

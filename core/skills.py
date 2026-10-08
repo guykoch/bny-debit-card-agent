@@ -14,6 +14,8 @@ common lives in _shared.md and is prepended to whichever skill is chosen, so
 there is still only one copy of the client-resolution and confirmation rules.
 """
 
+from __future__ import annotations
+
 import os
 import re
 from dataclasses import dataclass, field

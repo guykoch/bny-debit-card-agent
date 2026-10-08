@@ -8,6 +8,8 @@ To go live, write one class per interface in integrations/bny/ and point
 config/settings.py at it. See INTEGRATION.md.
 """
 
+from __future__ import annotations
+
 from typing import Optional, Protocol
 
 from core.models import Card, Client

@@ -6,6 +6,8 @@ only `from_bny()` style conversion in integrations/bny/ needs to change — the
 rest of the codebase keeps using these shapes.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Optional
 

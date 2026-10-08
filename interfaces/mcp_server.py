@@ -14,6 +14,8 @@ behind this layer. That ordering is the point — a model that reaches MCP has
 still reached nothing.
 """
 
+from __future__ import annotations
+
 from config.settings import build_services
 from core import schemas
 from core.guardrails import dispatch

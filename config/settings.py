@@ -5,6 +5,8 @@ Going live should be a change to this file plus three classes in
 integrations/bny/ — nothing else.
 """
 
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 

@@ -9,6 +9,8 @@ static files and runs api/*.py as separate functions, this file is unused.
 Standard library only: `app` is a plain WSGI callable.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 

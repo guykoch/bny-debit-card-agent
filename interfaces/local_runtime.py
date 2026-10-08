@@ -25,6 +25,8 @@ The model never decides permissions here or there — it only produces a
 candidate request, which core/guardrails.py then judges.
 """
 
+from __future__ import annotations
+
 import re
 from datetime import date, timedelta
 

@@ -8,6 +8,8 @@ Each one proves something a reviewer will ask about:
   - a malformed request dies before our code runs
 """
 
+from __future__ import annotations
+
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

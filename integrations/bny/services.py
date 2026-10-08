@@ -8,6 +8,8 @@ Each method below names what we need from BNY. Where our assumption turns out
 to be wrong, change it here rather than anywhere in core/.
 """
 
+from __future__ import annotations
+
 from typing import Optional
 
 from core.models import Card, Client

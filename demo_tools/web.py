@@ -8,6 +8,8 @@ The product never imports this module; interfaces/a2a_server.py forwards
 /api/demo/* here and nothing else.
 """
 
+from __future__ import annotations
+
 import hmac
 import json
 

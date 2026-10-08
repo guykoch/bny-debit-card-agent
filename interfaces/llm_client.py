@@ -11,6 +11,8 @@ a change of OPENAI_BASE_URL and the credential in config/settings.py, if their
 gateway speaks the same API; otherwise only this file changes.
 """
 
+from __future__ import annotations
+
 import json
 import urllib.error
 import urllib.request
