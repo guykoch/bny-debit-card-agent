@@ -8,8 +8,7 @@
   try { passcode = localStorage.getItem(KEY) || ""; } catch (e) { /* private mode */ }
 
   const css = `
-  #demo-slot { width: 100%; max-width: 440px; margin-bottom: 10px; }
-  .panel { height: min(820px, calc(100vh - 110px)) !important; }
+  #demo-slot { margin-bottom: 10px; }
   .demo-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
     background: #FFF7E6; border: 1.5px dashed #C9A227; border-radius: 10px;
     font: 12px "Segoe UI", Calibri, Arial, sans-serif; color: #6B5310; }
@@ -31,7 +30,13 @@
     padding: 9px 12px; border: 1px solid #D5DDE8; border-radius: 8px; margin-bottom: 10px; }
   .demo-gate button { width: 100%; font: inherit; font-weight: 600; font-size: 14px; padding: 9px;
     border: 0; border-radius: 8px; background: #2F5D9A; color: #fff; cursor: pointer; }
-  .demo-gate .err { color: #B03030; font-size: 12.5px; min-height: 16px; margin-bottom: 6px; }`;
+  .demo-gate .err { color: #B03030; font-size: 12.5px; min-height: 16px; margin-bottom: 6px; }
+  @media (max-width: 600px) {
+    #demo-slot { margin-bottom: 6px; }
+    .demo-bar { padding: 6px 10px; gap: 8px; }
+    .demo-bar .grow { font-size: 0; }
+    .demo-gate input { font-size: 16px; }
+  }`;
   const style = document.createElement("style");
   style.textContent = css;
   document.head.appendChild(style);
