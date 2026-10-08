@@ -6,10 +6,10 @@ everything back to the starting state. Everyone shares the same data.
 
 | Piece | Service | Where it lives in the repo |
 |---|---|---|
-| Chat page and Python code | Vercel | `app.py` (entry), `public/`, everything else |
+| Chat page and Python code | Vercel | `app.py` (entry), `web/`, everything else |
 | Data that changes (cards, travel notices, conversations, audit) | Convex project `BNY_Debit_Card_Manager` | `convex-demo-db/` |
 | Understanding the requests | OpenAI GPT-5.4 | your key, in Vercel settings |
-| Passcode screen and reset button (demo only) | — | `demo_tools/`, `public/demo-tools.js` |
+| Passcode screen and reset button (demo only) | — | `demo_tools/`, `web/demo-tools.js` |
 
 Clients and advisor permissions are not in the database: they come from the CSV
 files in `integrations/mock/data/` and never change.
@@ -113,7 +113,7 @@ development copy instead. Add `DEMO_MODE=true` to see the reset bar locally.
 ## For the final deliverable
 
 Remove `DEMO_MODE` and `DEMO_PASSCODE` (or delete `demo_tools/` and
-`public/demo-tools.js`). The reset endpoint then answers 404, there is no
+`web/demo-tools.js`). The reset endpoint then answers 404, there is no
 passcode screen, and the chat page never loads the demo script. Nothing in the
 product logic depends on any of it.
 

@@ -13,7 +13,7 @@ These are **changes on top of the existing repository** — not a rebuild. Apply
 edit only what §5 and §7 list, and add only the new files listed in §3, §4 and §6.
 
 **Base version check before starting** (the plan assumes this version):
-- `interfaces/llm_runtime.py`, `interfaces/llm_client.py` and `public/index.html` exist
+- `interfaces/llm_runtime.py`, `interfaces/llm_client.py` and `web/index.html` exist
   (the GPT-5.4 runtime and the mock NetX AI chat).
 - `agent/` contains only `README.md`.
 - `tools/` has 8 schemas; `integrations/mock/data/` has `clients.csv`, `cards.csv`,
@@ -32,7 +32,7 @@ If any of these differs, stop and ask Guy before changing anything.
 | `tools/get_recent_declines.json`, `get_travel_notices.json`, `get_holds.json`, `get_card_limits.json` | `core/schemas.py` (integer type), `core/guardrails.py` (`_read()` only) |
 | `agent/state.py`, `agent/runner.py`, `agent/workflows/declined-card.md` | `integrations/ports.py`, `integrations/mock/services.py`, `integrations/bny/services.py` |
 | `tests/test_agent.py` | `core/skills.py` (workflow loaders), `interfaces/llm_runtime.py` (routing + resume) |
-| | `interfaces/local_runtime.py` (one message), `public/index.html` (steps), `interfaces/a2a_agent_card.json`, `agent/README.md`, docs (§9) |
+| | `interfaces/local_runtime.py` (one message), `web/index.html` (steps), `interfaces/a2a_agent_card.json`, `agent/README.md`, docs (§9) |
 
 ## 0. In one paragraph
 
@@ -321,7 +321,7 @@ Rewrite from "nothing built" to: what is built (one job), the three files, the r
 | `core/skills.py` | `load_workflows()` (reads `agent/workflows/*.md` with the same frontmatter parser), `get_workflow(name)`, `workflow_prompt(wf)` = `_shared.md` + the workflow body, `workflow_tools(wf)` = its listed tools from `tools/` |
 | `interfaces/llm_runtime.py` | Router: add workflows to the choice list (`declined-card` with its description and triggers) and one rule: "why was a card declined / card not working" → `declined-card`. If chosen: `Runner(self).start(text)`; if a job is `waiting`, the next message goes to `runner.resume()` (unless the router picks something else, which ends the job). Keep everything else as is |
 | `interfaces/local_runtime.py` | If a sentence matches the workflow triggers: "Investigations need the GPT-5.4 runtime." |
-| `public/index.html` | If `data.steps` is present, draw them as small grey lines with a tick above the answer. Show a light "Investigating…" typing state |
+| `web/index.html` | If `data.steps` is present, draw them as small grey lines with a tick above the answer. Show a light "Investigating…" typing state |
 | `interfaces/a2a_agent_card.json` | Add the job to `skills` with an example; version 0.3.0 |
 | `core/handlers.py`, `core/cards.py`, write path of `core/guardrails.py`, the six SKILL.md files, `_shared.md` | **No change** |
 | `interfaces/a2a_server.py` | No change (the branch lives inside `GptConversation`) |

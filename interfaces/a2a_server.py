@@ -17,7 +17,7 @@ Run it locally:
 
 Endpoints
     POST /  or  /api/chat   one advisor message (or button click) in, one reply out
-    GET  /                  the mock NetX AI chat page (public/index.html)
+    GET  /                  the mock NetX AI chat page (web/index.html)
     GET  /api/info          which runtime is active, and the demo advisors
     GET  /api/audit         the audit trail so far (demo only)
     /api/demo/*             demo-only tools (passcode, reset) - see demo_tools/
@@ -39,7 +39,7 @@ from interfaces.local_runtime import Conversation
 from interfaces.threads import build_threads
 
 _ROOT = os.path.join(os.path.dirname(__file__), "..")
-_PUBLIC = os.path.join(_ROOT, "public")
+_PUBLIC = os.path.join(_ROOT, "web")  # not "public": Vercel leaves that folder out of the Python bundle
 _STATIC = {"/": "index.html", "/index.html": "index.html", "/demo-tools.js": "demo-tools.js"}
 
 _SERVICES = None

@@ -89,7 +89,7 @@ integrations/mock/              the fake systems that read it
 integrations/bny/services.py   TEMPLATE for the real ones - see INTEGRATION.md
 interfaces/a2a_server.py       the front door BNY's orchestrator calls; also serves the demo chat
 interfaces/threads.py          where conversations are kept between messages (memory or Convex)
-public/index.html              the mock NetX AI chat panel (display only, no decisions)
+web/index.html              the mock NetX AI chat panel (display only, no decisions)
 interfaces/llm_runtime.py      THE AI LAYER - GPT-5.4 picks the skill and fills its form
 interfaces/llm_client.py       the one place that calls the OpenAI API (standard library)
 interfaces/local_runtime.py    keyword stand-in for GPT-5.4, used when there is no key
@@ -105,7 +105,7 @@ DEPLOY.md                      how to host the team demo on Vercel + Convex
 app.py, vercel.json            Vercel entry point (hands off to a2a_server.route)
 integrations/convex_store/     the card system and audit stored in Convex (hosted demo)
 convex-demo-db/                the Convex tables and functions, incl. saved default state + reset
-demo_tools/, public/demo-tools.js   DEMO ONLY: passcode screen and reset button
+demo_tools/, web/demo-tools.js   DEMO ONLY: passcode screen and reset button
 ```
 
 ## What we assumed
@@ -131,7 +131,7 @@ Each assumption is marked in the code where it bites. See `INTEGRATION.md`.
 ## What is deliberately not here
 
 - No production UI. The chat panel is BNY's; we return card payloads for it to
-  render. `public/index.html` is a demo mock of it.
+  render. `web/index.html` is a demo mock of it.
 - No multi-step agent. See `agent/README.md` for exactly what that would add.
 - No retries. Re-running a write without the advisor asking is not our call.
 

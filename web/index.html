@@ -280,7 +280,7 @@ advisorSel.onchange = newConversation;
 function start() { newConversation(); input.focus(); }
 
 // Demo-only hook: the hosted team demo adds a passcode screen and a reset bar
-// (public/demo-tools.js). The product never needs it; without DEMO_MODE and
+// (web/demo-tools.js). The product never needs it; without DEMO_MODE and
 // DEMO_PASSCODE the server does not offer that file and this does nothing.
 function demoHeaders() { return (window.DemoTools && window.DemoTools.headers()) || {}; }
 window.NetXChat = { start, newConversation };

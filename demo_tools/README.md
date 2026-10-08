@@ -1,13 +1,13 @@
 # demo_tools — for the hosted team demo only
 
-Not part of the product. Remove this folder (and `public/demo-tools.js`) for the
+Not part of the product. Remove this folder (and `web/demo-tools.js`) for the
 final deliverable, or simply leave `DEMO_MODE` and `DEMO_PASSCODE` unset: then
 the reset endpoint answers 404, the passcode check is off, and the chat page
 never loads `demo-tools.js`.
 
 | Piece | What it does |
 |---|---|
-| `public/demo-tools.js` | Passcode screen before the chat; "Demo controls" bar with **Reset demo data** above the chat panel |
+| `web/demo-tools.js` | Passcode screen before the chat; "Demo controls" bar with **Reset demo data** above the chat panel |
 | `demo_tools/web.py` | `/api/demo/check-passcode` and `/api/demo/reset` |
 | `demo_tools/reset.py` | Puts all data back to the saved default state |
 

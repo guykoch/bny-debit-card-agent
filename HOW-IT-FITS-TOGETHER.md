@@ -226,7 +226,7 @@ Three card kinds cover all six actions:
   (after a lost/stolen report: "Would you like me to order a replacement card?")
 
 We describe the card; BNY's chat draws it with its own components. For the
-demo, `public/index.html` draws them in the style of the NetX AI panel.
+demo, `web/index.html` draws them in the style of the NetX AI panel.
 `to_text()` produces the same content as plain text, so if card rendering is
 unavailable nothing breaks.
 

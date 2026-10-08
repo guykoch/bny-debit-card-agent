@@ -558,7 +558,7 @@ ADV-1234 / ADV-5678 / ADV-9012. `GET /api/audit` shows the audit trail.
 | Change wording of errors | `core/errors.py`, `core/handlers.py`, and the error table in `_shared.md` |
 | Change routing | SKILL.md `description` and `triggers` (read by the GPT routing call) and `priority` (keyword stand-in); the routing rules in `llm_runtime._route()`; re-run `test_skills` |
 | Change how GPT-5.4 is instructed | the skill files first; chat-mechanics wording in `llm_runtime.runtime_notes()`; model/effort in `.env` or `config/settings.py` |
-| Change the demo chat's look | `public/index.html` only (display only; it makes no decisions) |
+| Change the demo chat's look | `web/index.html` only (display only; it makes no decisions) |
 | Mock data | CSVs; check `mock/data/README.md` "rows the tests depend on" and the deck examples (§5.7) |
 | Go live | `integrations/bny/services.py` + `DCA_MODE=bny`; real `_sink` in `audit.py`; point `OPENAI_BASE_URL`/credential at BNY's on-prem GPT-5.4 (or rewrite `llm_client.py` only); adjust `handle()` in `a2a_server.py` if BNY's A2A envelope differs |
 | Add the agent layer later | see section 6 |
@@ -691,7 +691,7 @@ GPT-5.4 via **his own OpenAI API key** (public model id `gpt-5.4`; BNY's on-prem
 reachable); **GPT-5.4 also does the routing** (not keywords); **six actions only** (read-only
 questions such as "what cards does Robert have?" get the fixed out-of-scope reply, as agreed
 with Ben); an **advisor switcher** in the chat header (mock sign-in). The agent stays unbuilt.
-- New: `interfaces/llm_runtime.py`, `interfaces/llm_client.py`, `public/index.html`,
+- New: `interfaces/llm_runtime.py`, `interfaces/llm_client.py`, `web/index.html`,
   `tests/test_llm_runtime.py` (36 checks), `.env.example`.
 - `interfaces/a2a_server.py`: picks the runtime, serves the chat page and `/api/*`, threaded server.
 - `config/settings.py`: `.env` loader and the AI-layer settings (§5.6).
@@ -728,9 +728,9 @@ screen; and a server secret so only our server can call the Convex functions.
   setup deployed only the static page, so `/api/info` was 404 and the chat showed
   "Server not reachable"),
   `.python-version` (3.12), `.vercelignore`, `demo_tools/` (reset + passcode endpoints,
-  README), `public/demo-tools.js` (passcode screen + "Demo controls" bar), `DEPLOY.md`,
+  README), `web/demo-tools.js` (passcode screen + "Demo controls" bar), `DEPLOY.md`,
   `tests/test_hosting.py` (20).
-- Changed: the chat page moved to `public/index.html` (tiny demo hook: loads
+- Changed: the chat page moved to `web/index.html` (tiny demo hook: loads
   `demo-tools.js` only if `/api/info` reports demo_mode or passcode_required);
   `interfaces/a2a_server.py` (one `route()` for local and Vercel; conversation
   snapshot/restore per message, only for the same advisor and runtime; passcode check;
@@ -754,7 +754,7 @@ screen; and a server secret so only our server can call the Convex functions.
   Vercel or real Convex** (blocked from the build sandbox) — first real run is Guy's
   deploy, following `DEPLOY.md`.
 - Final deliverable: unset `DEMO_MODE`/`DEMO_PASSCODE` or delete `demo_tools/` and
-  `public/demo-tools.js`; nothing in the product depends on them.
+  `web/demo-tools.js`; nothing in the product depends on them.
 - Local SSL note: on macOS python.org installs, run "Install Certificates.command" if
   OpenAI calls fail with CERTIFICATE_VERIFY_FAILED.
 
