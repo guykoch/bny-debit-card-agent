@@ -33,13 +33,7 @@ skills there are.
 
 ## How one gets chosen
 
-With GPT-5.4 (`interfaces/llm_runtime.py`), a short routing call reads the
-conversation plus each skill's `description` and `triggers` and returns one
-skill name, or "none". So write descriptions and triggers for a reader, not
-only for a keyword match.
-
-Without a model, the keyword stand-in uses `skills.route(utterance)`, which
-matches triggers, **highest priority first**. That
+`skills.route(utterance)` matches triggers, **highest priority first**. That
 ordering is what keeps the cross-action cases right:
 
 > "Jane lost her wallet, lock the card"
@@ -55,14 +49,10 @@ there. `tests/test_skills.py` checks the six cases that matter.
 ## What the model actually receives
 
 ```python
-skill = <chosen by the routing call>     # or skills.route(utterance) without a model
+skill = skills.route(utterance)
 skills.system_prompt(skill)   # _shared.md + that skill's body
 skills.tools_for(skill)       # its own tool + find_client + list_cards
 ```
-
-(The GPT-5.4 runtime also adds short "runtime notes" about how this chat
-works - today's date, that the action tool only shows a confirmation panel -
-and a presentation-only `present_options` tool for showing buttons.)
 
 So the model sees one action and three tools, not six actions and eight. That
 is the main benefit of the split: a smaller decision, and a shorter prompt.

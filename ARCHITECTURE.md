@@ -10,8 +10,8 @@ advisor types in the NetX360 chat
   A2A  ->  interfaces/a2a_server.py                                    (ours, from here down)
         |
         v
-  understanding: GPT-5.4 picks the skill, then fills that skill's form
-        |        (SKILL.md + tools/*.json); asks when something is unclear
+  understanding: SKILL.md + tools/*.json + GPT-5.4
+        |        picks one tool, fills the form, asks when unclear
         v
   core/schemas.py          rejects a malformed form
         |
@@ -76,46 +76,26 @@ The cost is drift between six files, and the shared file is what contains it.
 A skill should only hold what is true for that action and nothing else; if a
 paragraph would be copied between two skills, it belongs in `_shared.md`.
 
-Routing is a short first GPT-5.4 call that sees each skill's description and
-trigger words and returns one skill name, or "none" for anything that is not
-one of the six actions. Its rules keep the cross-action cases right: "She lost
-her wallet, lock the card" goes to `report-lost-stolen`, and "cancel her card"
-goes to `close-card`, which asks whether the advisor means lock or close. The
-keyword stand-in routes with the same trigger words and priorities, in code
-(`skills.route`), and is what `tests/test_skills.py` checks. See
+Routing is by trigger words with an explicit priority, which is what keeps the
+cross-action cases right. "She lost her wallet, lock the card" matches both
+`lock-card` and `report-lost-stolen`; the latter has the higher priority and
+wins, then offers the alternative rather than deciding silently. See
 `skills/debit-card/README.md`.
 
-## A2A, tool calling, A2UI - and why there is no MCP
+## MCP and A2A
 
 They sit at different levels and are easy to confuse.
 
 - **A2A** is between services: BNY's orchestrator and our agent. It carries the
   advisor id, the sentence, and optionally a resolved client id. See
   `interfaces/a2a_agent_card.json`.
-- **Tool calling** is between the model and its tools, inside our agent. The
-  schemas in `tools/` go into the model request; the model returns a tool name
-  and a filled-in form; our code runs it. See `interfaces/llm_runtime.py`.
-- **A2UI** is the format of a UI panel returned inside an A2A reply. Our panels
-  (`core/cards.py`) are A2UI-inspired; every one also has a plain-text form.
-- **MCP** is a protocol for publishing tools as a separate server for another
-  process to reach. Our agent hosts the model and owns its tools in one
-  process, so MCP has no role. `interfaces/mcp_server.py` is optional packaging
-  for the case where BNY's platform hosts the model instead.
+- **MCP** is between a model and its tools, inside our agent. It advertises the
+  eight schemas and routes a validated call to our handler. See
+  `interfaces/mcp_server.py`.
 
-## What is AI and what is not
-
-| Part | AI? |
-|---|---|
-| Choosing the skill for a message | GPT-5.4 (a short routing call) |
-| Filling in that skill's form, asking about anything missing or unclear | GPT-5.4 |
-| Lookups, the "which client / which card" panels, id checks | Plain code |
-| Schema check, ownership, state rules, entitlement | Plain code |
-| Confirmation panel, the Confirm click (a replay, no model call) | Plain code |
-| The card action and the audit | Plain code |
-| Multi-step jobs (the agent layer) | Not built - see `agent/README.md` |
-
-`interfaces/local_runtime.py` is a keyword stand-in for the two AI rows, so
-everything runs without a model. `config/settings.py` chooses between them.
+The prototype does the MCP job in-process (`core/schemas.py` plus the dispatch
+table) so it runs with no dependencies. Swapping in a real MCP server changes
+no skill, no schema and no guardrail.
 
 ## Replaceability
 

@@ -7,7 +7,6 @@ of the interaction and the guardrails, not language understanding.
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-os.environ["DCA_STORE"] = "memory"      # never touch the shared demo database
 
 from config.settings import build_services
 from core import audit

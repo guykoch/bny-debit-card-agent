@@ -19,11 +19,9 @@ Track which required fields are still empty and ask only for those.
 ## Dates
 
 - Convert relative phrases into actual dates and **show your working**.
-  "next month for a couple of weeks" → propose the 1st to the 15th of next
-  month, and let the advisor confirm or correct it.
-- **Never submit a date you inferred without showing it first.** Either ask,
-  or let the confirmation panel show it: the panel lists the dates and offers
-  "Change dates", and nothing runs until the advisor confirms.
+  "next month for a couple of weeks" → propose 3–17 October and ask the advisor
+  to confirm or correct.
+- **Never submit a date you inferred without showing it first.**
 - If the end date is before the start date, or the range is longer than 90
   days, say so and ask.
 
@@ -42,5 +40,5 @@ Never fill a required travel field with a default.
 > Advisor: Sarah's off to Georgia next month for a couple of weeks
 > → resolve client → resolve card
 > → "Georgia the country, or the US state?"
-> → propose the 1st to the 15th of next month
-> → travel_notice → the panel shows the dates, with Change dates → confirm
+> → "Returning the 17th, based on 'a couple of weeks'? Correct me if not."
+> → restate everything → confirm → travel_notice

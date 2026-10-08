@@ -1,11 +1,9 @@
 """
-OPTIONAL PACKAGING - not in the request path.
+Exposes the eight tools over MCP, so any model runtime can reach them.
 
-Our agent hosts the model (GPT-5.4) and owns its tools in one process, so the
-model reaches them by plain tool calling (interfaces/llm_runtime.py) and MCP
-has no role. This file only matters in one scenario: if BNY's platform hosts
-the model itself and expects agents to publish tools as a separate MCP server.
-Whether that is the case is an open question for BNY.
+The prototype does not need this — core/schemas.py plus core/guardrails.py
+already do the same job in-process, with no dependency. This file exists so the
+production path is visible and short.
 
 Install the SDK to run it:
     pip install mcp

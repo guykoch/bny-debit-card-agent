@@ -116,8 +116,7 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     # 3. confirmation
     if not confirmed:
         fields, warning = spec.summary(ti, card)
-        card_payload = cards.confirm_card(spec.title, fields, warning, spec.confirm_label,
-                                          extra_actions=spec.extra_actions, danger=spec.danger)
+        card_payload = cards.confirm_card(spec.title, fields, warning, spec.confirm_label)
         return ToolResponse(status="awaiting_confirmation",
                             message=cards.to_text(card_payload),
                             card=card_payload,

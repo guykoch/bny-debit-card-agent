@@ -1,10 +1,9 @@
 """
 Loads tools/*.json and checks a filled-in form against them.
 
-The model's tool call is checked here, in our own code, before anything else
-runs - so a reviewer can see the check rather than taking it on trust. (Our
-agent hosts the model and owns its tools in one process, so this is plain tool
-calling; there is no MCP server in the request path.)
+In production an MCP runtime does most of this for you. It is implemented here
+anyway for two reasons: the prototype runs without MCP installed, and a
+reviewer can see the check rather than taking it on trust.
 """
 
 import json
