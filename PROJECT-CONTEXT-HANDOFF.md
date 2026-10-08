@@ -722,9 +722,11 @@ screen; and a server secret so only our server can call the Convex functions.
   getCard, listCards, setCardStatus, insertCard, addTravelNotice, listTravelNotices,
   addFlag, load/saveConversation, addAudit, listAudit, ensureDefaults, reset; each checks
   `DEMO_SERVER_SECRET`), `integrations/convex_store/` (stdlib HTTP client + ConvexCardSystem),
-  `interfaces/threads.py`, `api/chat.py`, `api/info.py`, `api/audit.py`,
-  `api/demo/reset.py`, `api/demo/check-passcode.py` (all alias `a2a_server.WebHandler`),
-  `vercel.json` (output `public/`, functions `api/**/*.py`, maxDuration 60),
+  `interfaces/threads.py`, root `app.py` (the only Vercel entry: stdlib WSGI `app`
+  calling the same `route()`), `vercel.json` (`builds` @vercel/python for `app.py` +
+  `routes` sending every path to it; an earlier `api/*.py` + `outputDirectory: public`
+  setup deployed only the static page, so `/api/info` was 404 and the chat showed
+  "Server not reachable"),
   `.python-version` (3.12), `.vercelignore`, `demo_tools/` (reset + passcode endpoints,
   README), `public/demo-tools.js` (passcode screen + "Demo controls" bar), `DEPLOY.md`,
   `tests/test_hosting.py` (20).

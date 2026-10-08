@@ -25,6 +25,10 @@ class ActionSpec:
     summary: Callable            # (tool_input, card) -> (fields, warning)
     precheck: Optional[Callable] = None   # (tool_input, card) -> None, raises if impossible
     confirm_label: str = "Confirm"
+    # Presentation only - none of these change what runs or when.
+    extra_actions: Optional[list] = None  # extra confirm-panel buttons, e.g. "Change dates"
+    danger: bool = False                  # cannot be undone; drawn in red
+    follow_up: Optional[str] = None       # one sentence the chat adds after success
 
 
 # ---------------------------------------------------------------- shared bits
@@ -138,10 +142,15 @@ def _travel_execute(svc, session, ti, card):
         start_date=ti["start_date"], end_date=ti["end_date"])
 
 
+def _readable(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"{d.day} {d:%b %Y}"                      # 6 Nov 2026
+
+
 def _travel_summary(ti, card):
     return _base_fields(card) + [
         ("Destination", ", ".join(ti["destination"])),
-        ("Dates", f"{ti['start_date']} to {ti['end_date']}"),
+        ("Dates", f"{_readable(ti['start_date'])} to {_readable(ti['end_date'])}"),
     ], None
 
 
@@ -166,13 +175,15 @@ ACTIONS: dict[str, ActionSpec] = {
     "close_card": ActionSpec(
         title="Close debit card permanently", execute=_close_execute,
         summary=_close_summary, precheck=_close_precheck,
-        confirm_label="Close permanently"),
+        confirm_label="Close permanently", danger=True),
 
     "report_lost_stolen": ActionSpec(
         title="Report card lost or stolen", execute=_lost_execute,
-        summary=_lost_summary, precheck=_lost_precheck),
+        summary=_lost_summary, precheck=_lost_precheck,
+        follow_up="Would you like me to order a replacement card?"),
 
     "travel_notice": ActionSpec(
         title="Add travel notice", execute=_travel_execute,
-        summary=_travel_summary, precheck=_travel_precheck),
+        summary=_travel_summary, precheck=_travel_precheck,
+        extra_actions=[{"label": "Change dates", "value": "change_dates"}]),
 }

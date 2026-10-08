@@ -6,7 +6,7 @@ everything back to the starting state. Everyone shares the same data.
 
 | Piece | Service | Where it lives in the repo |
 |---|---|---|
-| Chat page and Python code | Vercel | `public/`, `api/`, everything else |
+| Chat page and Python code | Vercel | `app.py` (entry), `public/`, everything else |
 | Data that changes (cards, travel notices, conversations, audit) | Convex project `BNY_Debit_Card_Manager` | `convex-demo-db/` |
 | Understanding the requests | OpenAI GPT-5.4 | your key, in Vercel settings |
 | Passcode screen and reset button (demo only) | — | `demo_tools/`, `public/demo-tools.js` |
@@ -74,8 +74,10 @@ excluded automatically, so your key stays on your laptop. Then in Vercel:
 **Add New → Project → Import** the repository → Framework preset **Other** → **Deploy**.
 (If you already created the Vercel project, connect it to the repository instead.)
 
-Vercel reads `vercel.json`: it serves `public/` as the website and runs the files
-in `api/` as Python functions, with up to 60 seconds per message.
+The preset does not matter: `vercel.json` tells Vercel to run `app.py` (Python)
+for every address, and `app.py` serves the chat page, `/api/*` and the demo tools
+through the same code as the laptop server. Each message gets up to 5 minutes on
+the free plan.
 
 ### 7. Test it
 
@@ -124,3 +126,6 @@ product logic depends on any of it.
 | "Could not find public function" | Convex functions not deployed to that copy: run `npx convex deploy` |
 | Passcode always wrong | `DEMO_PASSCODE` in Vercel has a typo or spaces; redeploy after fixing |
 | Reset button missing | `DEMO_MODE` is not exactly `true`, or not redeployed |
+| Build error "pattern … doesn't match any Serverless Functions" | An old `vercel.json` with a `functions` block: use the current one (`builds` + `routes` to `app.py`) |
+| "500 FUNCTION_INVOCATION_FAILED" | Vercel runs an older Python (3.9); every file now starts with `from __future__ import annotations` so it works there. Other start-up errors now show as a message on the page |
+| Page loads but says "Server not reachable"; `/api/info` gives 404 | Vercel served only the static page: use the current `vercel.json` and push again |

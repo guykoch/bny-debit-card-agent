@@ -2,7 +2,7 @@
   "name": "debit-card-agent",
   "displayName": "Debit Card Management",
   "description": "Performs routine Corestone debit card actions for an advisor: lock, unlock, replace, close permanently, report lost or stolen, and travel notices. Acts on one card at a time and always asks for confirmation before changing anything.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "owner": "NYU Stern Tech Solutions team",
   "capabilities": {
     "writes": true,

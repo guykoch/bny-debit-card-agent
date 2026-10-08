@@ -51,22 +51,33 @@ we would ignore it.
 
 ## Step 2 — Working out what was asked
 
-`interfaces/local_runtime.py` + `core/skills.py` + `skills/debit-card/` + `tools/*.json`
+`interfaces/llm_runtime.py` + `core/skills.py` + `skills/debit-card/` + `tools/*.json`
 
-This is the only place AI is involved — and in the prototype there is no AI at
-all. `local_runtime.py` is a keyword interpreter standing in for GPT-5.4 so the
-whole thing runs with no API key. It does the same job the model will do:
+This is the only place AI is involved. GPT-5.4 does two things here, and only
+these two:
 
-1. Route the sentence to one of six skills (`skills.route`), highest
-   priority first — so "lost her wallet, lock it" reaches `report-lost-stolen`
-   rather than `lock-card`.
-2. Resolve the client — call `find_client`, and if more than one matches, ask.
-3. Resolve the card — call `list_cards`, and if more than one, ask.
-4. Fill in anything else that action needs.
+1. **Choose the skill.** A short first call reads the conversation and each
+   skill's description and returns one of the six skills, or "none" when the
+   message is not one of the six actions (the chat then gives a fixed reply).
+2. **Fill in that skill's form.** A second call gets `_shared.md` plus that one
+   skill's file, and only three tools: its own action plus the two read-only
+   lookups, `find_client` and `list_cards`. It looks the client and card up,
+   asks the advisor about anything missing or unclear, and fills in the form.
 
-The rules it follows are `_shared.md` plus that one skill's file: when to act,
-what to ask, and what never to do. The model is given one action and three
-tools, not six and eight. The shape of what it produces is fixed by `tools/lock_card.json`:
+Our code stays in charge around it:
+
+- Lookups run through `core/guardrails.py` like everything else.
+- If a lookup finds two clients or two cards, **code** shows the "which one?"
+  panel and matches the answer — the model never picks.
+- An action is refused unless its ids came back from a lookup ("never invent
+  an id", enforced).
+- The model can only ever request an action with `confirmed=False`, so the most
+  it can cause is a confirmation panel.
+
+This is ordinary tool calling inside one skill and one action. It is not the
+agent layer — nothing here chains several actions (see `agent/README.md`).
+
+The shape of what the model produces is fixed by `tools/lock_card.json`:
 
 ```json
 { "name": "lock_card", "access": "write",
@@ -85,9 +96,11 @@ Out comes a filled-in form:
 
 **This is a request, not an action.** Nothing has happened yet.
 
-**Going live:** replace the keyword rules with a call to BNY's GPT-5.4, passing
-`skills.system_prompt(skill)` and `skills.tools_for(skill)`. Nothing else in
-the repo changes.
+**Without a model:** `interfaces/local_runtime.py` is a keyword stand-in that
+does the same two jobs with rules instead of language understanding. It needs
+no key and no network. `config/settings.py` picks one: GPT-5.4 when
+`OPENAI_API_KEY` is set, otherwise the stand-in. Everything from step 3 down is
+identical for both.
 
 ---
 
@@ -105,9 +118,8 @@ missing card_id              -> "Missing required field: card_id"
 reason: "because"            -> "reason must be one of: damaged, lost, ..."
 ```
 
-In production an MCP runtime does this for you. It is implemented here anyway
-so the prototype needs no dependencies, and so a reviewer can see the check
-rather than taking it on trust.
+This is our own code, not the model's: a reviewer can see the check rather
+than taking it on trust.
 
 ---
 
@@ -152,7 +164,10 @@ Five steps, in this order, every time:
    card system, then `core/audit.py` writes the record.
 
 So a lock is **two trips** through this file. First trip returns a card.
-Second trip, carrying `confirmed=True`, does the work.
+Second trip, carrying `confirmed=True`, does the work. The second trip is the
+advisor's Confirm click: the runtime replays the stored form straight into
+this function, **with no model call**, and every check runs again in case the
+card changed in between.
 
 ---
 
@@ -204,13 +219,16 @@ Every action returns the same two keys, which is the contract BNY must match:
 
 Three card kinds cover all six actions:
 
-- **confirm** — fields, an optional warning, Confirm and Cancel
+- **confirm** — fields, an optional warning, Confirm and Cancel (travel
+  notice adds "Change dates"; closing permanently is marked `danger`)
 - **choice** — when we must ask: which client, which card, which Georgia
-- **result** — what happened
+- **result** — what happened, plus a fixed follow-up where an action has one
+  (after a lost/stolen report: "Would you like me to order a replacement card?")
 
-We describe the card; BNY's chat draws it with its own components. `to_text()`
-produces the same content as plain text, so if card rendering is unavailable
-nothing breaks.
+We describe the card; BNY's chat draws it with its own components. For the
+demo, `public/index.html` draws them in the style of the NetX AI panel.
+`to_text()` produces the same content as plain text, so if card rendering is
+unavailable nothing breaks.
 
 ```
 Lock debit card
@@ -225,9 +243,10 @@ Lock debit card
 ## The whole path, in one list
 
 ```
-interfaces/a2a_server.py      the request arrives
-interfaces/local_runtime.py   which tool, which client, which card   <- the only AI
+interfaces/a2a_server.py      the request arrives (or the mock chat page sends it)
+interfaces/llm_runtime.py     GPT-5.4: which skill, then fill its form   <- the only AI
    reads skills/debit-card/SKILL.md and tools/*.json
+   (interfaces/local_runtime.py does the same with keywords when there is no key)
 core/schemas.py               is the form well formed?
 core/guardrails.py            entitled? owns it? confirmed? act. log.
    uses core/handlers.py for what differs between actions
@@ -241,12 +260,13 @@ core/cards.py                 the reply the advisor sees
 ## Run it yourself
 
 ```bash
-python -m demo.run_demo            # a scripted conversation
-python -m tests.test_guardrails    # 17 checks, including the refusals
+python -m interfaces.a2a_server    # then open http://localhost:8080 and chat
+python -m demo.run_demo            # a scripted conversation (keyword stand-in)
+python -m tests.test_guardrails    # 22 checks, including the refusals
+python -m tests.test_llm_runtime   # 36 checks of the code around GPT-5.4
 ```
 
-Keep this document open while the demo runs. Every printed line is one pass
-down that list.
+Keep this document open while you chat. Every reply is one pass down that list.
 
 ---
 

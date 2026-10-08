@@ -16,17 +16,28 @@ from typing import Optional
 
 def confirm_card(title: str, fields: list[tuple[str, str]],
                  warning: Optional[str] = None,
-                 confirm_label: str = "Confirm") -> dict:
-    """Shown before anything runs. The buttons are the advisor's authorisation."""
+                 confirm_label: str = "Confirm",
+                 extra_actions: Optional[list[dict]] = None,
+                 danger: bool = False) -> dict:
+    """
+    Shown before anything runs. The buttons are the advisor's authorisation.
+
+    extra_actions: buttons between Confirm and Cancel, e.g. travel notice's
+    {"label": "Change dates", "value": "change_dates"}. They never run the
+    action; they send the advisor back to editing.
+    danger: the action cannot be undone; the chat may draw Confirm in red.
+    """
     return {
         "kind": "confirm",
         "title": title,
         "fields": [{"label": k, "value": v} for k, v in fields],
         "warning": warning,
-        "actions": [
-            {"label": confirm_label, "value": "confirm", "style": "primary"},
-            {"label": "Cancel", "value": "cancel", "style": "secondary"},
-        ],
+        "danger": danger,
+        "actions": (
+            [{"label": confirm_label, "value": "confirm", "style": "primary"}]
+            + [{**a, "style": "alternative"} for a in (extra_actions or [])]
+            + [{"label": "Cancel", "value": "cancel", "style": "secondary"}]
+        ),
     }
 
 

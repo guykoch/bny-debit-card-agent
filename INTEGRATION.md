@@ -13,6 +13,20 @@ Fill in `integrations/bny/services.py`, then set `DCA_MODE=bny`. Nothing in
 | `BnyClientDirectory` | Which clients match this name, within this advisor's book? |
 | `BnyCardSystem` | The six actions, plus get a card and list a client's cards |
 
+## The AI layer: from OpenAI's GPT-5.4 to BNY's on-prem GPT-5.4
+
+The demo calls OpenAI's public GPT-5.4 (`gpt-5.4`) through
+`interfaces/llm_client.py`. To use BNY's on-prem instance instead:
+
+- If BNY's gateway speaks the same Chat Completions API, set `OPENAI_BASE_URL`
+  and the credential in `config/settings.py` (or the environment). Nothing else
+  changes.
+- If it does not, rewrite `interfaces/llm_client.py` only. Its one method,
+  `chat(messages, tools, response_format)`, is all the runtime uses.
+
+The model needs tool calling and JSON-schema answers (both used in
+`interfaces/llm_runtime.py`). Neither the prompts nor the guardrails change.
+
 ## What we need from BNY, in order of how much it matters
 
 **1. Is the orchestrator's entitlement check at client level or action level?**
@@ -52,6 +66,7 @@ fallback and nothing breaks - but we would rather know.
 | The orchestrator passes advisor id and sentence | Adjust the two unpack functions in `interfaces/a2a_server.py` |
 | The client id may already be resolved | We fall back to `find_client`; already handled |
 | The chat can render cards | Text fallback already built; no code change |
+| BNY's GPT-5.4 speaks the OpenAI Chat Completions API | Rewrite `interfaces/llm_client.py` only |
 | Status values are active / locked / closed / pending | Map them in `BnyCardSystem`; the precheck rules in `core/handlers.py` read these names |
 
 ## Before this goes near production

@@ -51,7 +51,7 @@ class CardSystem(Protocol):
     The six actions plus the lookups they need.
 
     BNY note: these names are ours. Map each one to the real endpoint in
-    integrations/bny/card_system.py. Signatures should not need to change;
+    integrations/bny/services.py. Signatures should not need to change;
     if they do, change them here first so the rest of the code follows.
     """
 

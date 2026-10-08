@@ -1,5 +1,7 @@
 # The prototype runs on the standard library alone.
 #
-# Optional, for the production path only:
-# mcp>=1.0          # interfaces/mcp_server.py
-# openai            # or BNY's internal client, to replace interfaces/local_runtime.py
+# The GPT-5.4 layer (interfaces/llm_client.py) calls the OpenAI API with the
+# standard library too - no SDK needed. It needs OPENAI_API_KEY; see .env.example.
+#
+# Optional, only for the packaging scenario in interfaces/mcp_server.py:
+# mcp>=1.0

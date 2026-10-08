@@ -32,10 +32,26 @@ from datetime import date, timedelta
 
 from core import cards, schemas, skills
 from core.guardrails import dispatch
+from core.handlers import ACTIONS
 from core.models import Session, ToolResponse
 
 YES = {"yes", "y", "confirm", "ok", "okay", "go ahead", "do it", "proceed"}
 NO = {"no", "n", "cancel", "stop"}
+CHANGE_DATES = "change_dates"          # value of the travel notice's "Change dates" button
+
+ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3,
+            "fourth": 4, "4th": 4}
+
+
+def with_follow_up(tool: str, result: ToolResponse) -> ToolResponse:
+    """Plain code: after a successful action, add the action's fixed follow-up
+    sentence (e.g. offer a replacement after a lost/stolen report)."""
+    follow = ACTIONS[tool].follow_up if tool in ACTIONS else None
+    if result.status == "ok" and follow:
+        result.message = f"{result.message}\n{follow}"
+        if result.card is not None:
+            result.card["follow_up"] = follow
+    return result
 
 AMBIGUOUS_PLACES = {"georgia": ["Georgia (country)", "Georgia (US state)"],
                     "springfield": ["Springfield, IL", "Springfield, MA", "Springfield, MO"]}
@@ -124,6 +140,15 @@ class Conversation:
         self.skill = None                     # the skill routed to on this turn
         self.pending: dict | None = None      # {"tool":..., "input":..., "missing":[...]}
 
+    # -- save / restore (for stateless hosting; see GptConversation) ----
+    def snapshot(self) -> dict:
+        return {"runtime": "keyword", "advisor_id": self.session.advisor_id,
+                "pending": self.pending, "skill": self.skill.name if self.skill else None}
+
+    def restore(self, state: dict) -> None:
+        self.pending = state.get("pending")
+        self.skill = skills.get(state["skill"]) if state.get("skill") else None
+
     # -- helpers ---------------------------------------------------------
     def _dispatch(self, tool, payload, confirmed=False) -> ToolResponse:
         return dispatch(self.services, self.session, tool, payload, confirmed)
@@ -163,14 +188,23 @@ class Conversation:
         self.session.utterance = text
         low = text.strip().lower()
 
-        # answering a confirmation
+        # answering a confirmation (trip 2 - no interpretation, just a replay)
         if self.pending and self.pending.get("awaiting_confirm"):
             if low in YES:
                 p = self.pending; self.pending = None
-                return self._dispatch(p["tool"], p["input"], confirmed=True)
+                # the audit should record what the advisor asked for, not "yes"
+                self.session.utterance = p.get("text") or text
+                return with_follow_up(p["tool"],
+                                      self._dispatch(p["tool"], p["input"], confirmed=True))
             if low in NO:
                 self.pending = None
                 return ToolResponse(status="ok", message="Cancelled. Nothing was changed.")
+            if low == CHANGE_DATES:
+                self.pending = None
+                return ToolResponse(
+                    status="needs_input",
+                    message="Changing dates needs the GPT-5.4 runtime. In keyword mode, "
+                            "start the request again with the new dates.")
 
         # answering a question we asked (a client id, a card id, a destination)
         if self.pending and self.pending.get("missing"):
@@ -186,27 +220,81 @@ class Conversation:
 
         client = self._resolve_client(text)
         if isinstance(client, ToolResponse):
-            self.pending = {"tool": tool, "input": {}, "missing": ["client_id"], "text": text}
+            self.pending = {"tool": tool, "input": {}, "missing": ["client_id"], "text": text,
+                            "choice": client.card}
             return client
 
         card = self._resolve_card(client)
         if isinstance(card, ToolResponse):
             self.pending = {"tool": tool, "input": {"client_id": client},
-                            "missing": ["card_id"], "text": text}
+                            "missing": ["card_id"], "text": text, "choice": card.card}
             return card
 
         return self._continue(tool, {"client_id": client, "card_id": card}, text)
+
+    @staticmethod
+    def _match_choice(text: str, panel: dict) -> str | None:
+        """
+        Map a typed answer onto one option of the choice panel we showed.
+
+        A button click sends the option's value directly. A typed answer may be
+        the option number ("2"), the last four digits ("2202", "the one ending
+        2202"), or the label itself ("Georgia (country)"). Returns None unless
+        exactly one option matches — we never pick between candidates.
+        """
+        options = panel.get("actions", []) if panel else []
+        t = text.strip().lower()
+        if not options or not t:
+            return None
+        for o in options:                                   # button click / exact
+            if t in (str(o["value"]).lower(), o["label"].lower()):
+                return o["value"]
+        if t.isdigit() and 1 <= int(t) <= len(options):      # "2"
+            return options[int(t) - 1]["value"]
+        words = re.findall(r"[a-z0-9]+", t)                  # "the second one"
+        nums = {ORDINALS[w] for w in words if w in ORDINALS}
+        if len(nums) == 1 and not re.search(r"\d{4}", t):
+            n = nums.pop()
+            return options[n - 1]["value"] if n <= len(options) else None
+        digits = re.findall(r"\d{4}", t)                     # "ending 2202"
+        if digits:
+            hits = [o for o in options if any(d in o["label"] for d in digits)]
+            if len(hits) == 1:
+                return hits[0]["value"]
+            return None
+        hits = [o for o in options if t in o["label"].lower()]   # "the country"
+        return hits[0]["value"] if len(hits) == 1 else None
 
     def _fill(self, text: str) -> ToolResponse:
         p = self.pending
         field = p["missing"][0]
         value = text.strip()
 
+        panel = p.get("choice")
+        if panel:
+            picked = self._match_choice(value, panel)
+            if picked is None:                               # ask again, never guess
+                return ToolResponse(
+                    status="needs_input",
+                    message="I couldn't tell which one you meant. Please pick from the list.\n"
+                            + cards.to_text(panel),
+                    card=panel)
+            value = picked
+            p.pop("choice", None)
+        elif field == "client_id":                           # free-text answer to "which client?"
+            found = self._resolve_client(value)
+            if isinstance(found, ToolResponse):
+                if found.card:
+                    p["choice"] = found.card
+                return found
+            value = found
+
         if field == "client_id":
             p["input"]["client_id"] = value
             card = self._resolve_card(value)
             if isinstance(card, ToolResponse):
                 p["missing"] = ["card_id"]
+                p["choice"] = card.card
                 return card
             p["input"]["card_id"] = card
         elif field == "card_id":
@@ -226,11 +314,11 @@ class Conversation:
             if "destination" not in payload:
                 dest, options = self.interp.destination(text)
                 if options:
-                    self.pending = {"tool": tool, "input": payload,
-                                    "missing": ["destination"], "text": text}
                     card = cards.choice_card("Which destination?",
                                              "That place name is ambiguous.",
                                              [{"label": o, "value": o} for o in options])
+                    self.pending = {"tool": tool, "input": payload,
+                                    "missing": ["destination"], "text": text, "choice": card}
                     return ToolResponse(status="needs_input", message=cards.to_text(card),
                                         card=card)
                 if not dest:
@@ -260,5 +348,6 @@ class Conversation:
 
         result = self._dispatch(tool, payload)
         if result.status == "awaiting_confirmation":
-            self.pending = {"tool": tool, "input": payload, "awaiting_confirm": True}
+            self.pending = {"tool": tool, "input": payload, "awaiting_confirm": True,
+                            "text": text}
         return result

@@ -16,11 +16,22 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 LOG: list[dict] = []
+_EXTRA_SINKS: list = []          # e.g. the Convex store in the hosted demo
+
+
+def add_sink(fn) -> None:
+    """Also send every row to fn(row). Used by the hosted demo to keep the audit in Convex."""
+    _EXTRA_SINKS.append(fn)
 
 
 def _sink(row: dict) -> None:
     """Replace this in production. Must never raise into the caller."""
     LOG.append(row)
+    for fn in _EXTRA_SINKS:
+        try:
+            fn(row)
+        except Exception:        # the audit must never break the action it records
+            pass
 
 
 def write(
