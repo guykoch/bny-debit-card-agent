@@ -1,0 +1,42 @@
+{
+  "name": "travel_notice",
+  "access": "write",
+  "description": "Record upcoming travel so the card is not blocked abroad.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client, or supplied by the orchestrator. Never invent one."
+      },
+      "card_id": {
+        "type": "string",
+        "description": "Card identifier returned by list_cards. Never invent one."
+      },
+      "destination": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "One or more countries or US states. Resolve ambiguous names with the advisor first."
+      },
+      "start_date": {
+        "type": "string",
+        "format": "date",
+        "description": "YYYY-MM-DD. Never infer a date without showing it to the advisor first."
+      },
+      "end_date": {
+        "type": "string",
+        "format": "date",
+        "description": "YYYY-MM-DD. Must be on or after start_date."
+      }
+    },
+    "required": [
+      "client_id",
+      "card_id",
+      "destination",
+      "start_date",
+      "end_date"
+    ]
+  }
+}

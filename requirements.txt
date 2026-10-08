@@ -1,0 +1,7 @@
+# The prototype runs on the standard library alone.
+#
+# The GPT-5.4 layer (interfaces/llm_client.py) calls the OpenAI API with the
+# standard library too - no SDK needed. It needs OPENAI_API_KEY; see .env.example.
+#
+# Optional, only for the packaging scenario in interfaces/mcp_server.py:
+# mcp>=1.0

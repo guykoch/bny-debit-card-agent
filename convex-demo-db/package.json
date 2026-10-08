@@ -1,0 +1,12 @@
+{
+  "name": "debit-card-demo-db",
+  "private": true,
+  "description": "Convex database for the hosted debit card demo. Not part of the product.",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.17.0"
+  }
+}

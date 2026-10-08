@@ -1,0 +1,39 @@
+{
+  "name": "report_lost_stolen",
+  "access": "write",
+  "description": "Block a card and flag the account after it is lost or stolen.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client, or supplied by the orchestrator. Never invent one."
+      },
+      "card_id": {
+        "type": "string",
+        "description": "Card identifier returned by list_cards. Never invent one."
+      },
+      "incident_type": {
+        "type": "string",
+        "enum": [
+          "lost",
+          "stolen"
+        ],
+        "description": "Ask the advisor which it was. Do not assume."
+      },
+      "last_known_use": {
+        "type": "string",
+        "description": "Optional free text, e.g. 'Tuesday at a petrol station'."
+      },
+      "flag_transactions": {
+        "type": "boolean",
+        "description": "True only if the advisor says the client does not recognise recent transactions."
+      }
+    },
+    "required": [
+      "client_id",
+      "card_id",
+      "incident_type"
+    ]
+  }
+}

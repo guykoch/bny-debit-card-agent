@@ -1,0 +1,37 @@
+{
+  "name": "debit-card-agent",
+  "displayName": "Debit Card Management",
+  "description": "Performs routine Corestone debit card actions for an advisor: lock, unlock, replace, close permanently, report lost or stolen, and travel notices. Acts on one card at a time and always asks for confirmation before changing anything.",
+  "version": "0.2.0",
+  "owner": "NYU Stern Tech Solutions team",
+  "capabilities": {
+    "writes": true,
+    "requiresConfirmation": true,
+    "returnsUI": "a2ui-card",
+    "textFallback": true
+  },
+  "skills": [
+    {
+      "id": "debit-card-management",
+      "name": "Debit card management",
+      "description": "Lock, unlock, replace, close, report lost or stolen, travel notice.",
+      "examples": [
+        "Lock Jane Miller's debit card",
+        "Sarah Chen is travelling to Portugal next month, add a travel notice",
+        "Replace the damaged card for account ...8821"
+      ]
+    }
+  ],
+  "input": {
+    "advisor_id": "required, from the authenticated session - never from the message text",
+    "utterance": "required, what the advisor typed",
+    "client_id": "optional, if Entity Mapping already resolved it",
+    "conversation_id": "optional, used to tie confirmations to the right thread"
+  },
+  "output": {
+    "status": "ok | awaiting_confirmation | needs_input | error",
+    "message": "plain text, always present",
+    "card": "A2UI payload, may be null if the surface cannot render cards"
+  },
+  "notes": "Entitlement is assumed to be checked by the orchestrator before routing; this agent trusts that by default and records it in the audit. It can be configured to re-check at the level of the individual action if the upstream check is at client level only."
+}

@@ -1,0 +1,22 @@
+{
+  "name": "unlock_card",
+  "access": "write",
+  "description": "Remove a temporary lock. Does not apply to closed cards.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client, or supplied by the orchestrator. Never invent one."
+      },
+      "card_id": {
+        "type": "string",
+        "description": "Card identifier returned by list_cards. Never invent one."
+      }
+    },
+    "required": [
+      "client_id",
+      "card_id"
+    ]
+  }
+}

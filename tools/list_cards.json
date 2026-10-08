@@ -1,0 +1,21 @@
+{
+  "name": "list_cards",
+  "access": "read",
+  "description": "List the Corestone debit cards on a client's account.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client, or supplied by the orchestrator. Never invent one."
+      },
+      "include_closed": {
+        "type": "boolean",
+        "description": "Include closed cards. Defaults to false."
+      }
+    },
+    "required": [
+      "client_id"
+    ]
+  }
+}

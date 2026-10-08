@@ -1,0 +1,4 @@
+.env
+.env.local
+**/__pycache__
+convex-demo-db/node_modules

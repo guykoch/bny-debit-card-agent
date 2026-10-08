@@ -1,0 +1,17 @@
+{
+  "name": "find_client",
+  "access": "read",
+  "description": "Look up clients by name. Returns only clients this advisor may see.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Name or partial name, as the advisor said it."
+      }
+    },
+    "required": [
+      "query"
+    ]
+  }
+}

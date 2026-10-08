@@ -1,0 +1,39 @@
+{
+  "name": "replace_card",
+  "access": "write",
+  "description": "Cancel the current card and issue a replacement.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client, or supplied by the orchestrator. Never invent one."
+      },
+      "card_id": {
+        "type": "string",
+        "description": "Card identifier returned by list_cards. Never invent one."
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "damaged",
+          "lost",
+          "stolen",
+          "expiring",
+          "other"
+        ],
+        "description": "Why it is being replaced. Ask the advisor; do not infer."
+      },
+      "delivery_address": {
+        "type": "string",
+        "description": "Where to send the new card. Defaults to the address on file, but must be shown to the advisor and confirmed."
+      }
+    },
+    "required": [
+      "client_id",
+      "card_id",
+      "reason",
+      "delivery_address"
+    ]
+  }
+}

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetX AI — debit card demo</title>
+<!--
+  Mock of the NetX AI chat panel in NetX360, for the debit card demo.
+  It only displays what the server returns. Every decision is made server-side
+  (core/guardrails.py); this page sends the advisor's text or the value of the
+  button they clicked, and draws the reply.
+
+  The copy / download / retry / speaker icons, the "+" and mic buttons, the
+  menu, the expand icon and the "Guide Me" tab are drawn for realism only and
+  do nothing.
+-->
+<style>
+  :root {
+    --bg: #F5F8FC; --border: #D5DDE8; --pill: #DCE6F4; --text: #2B2F36;
+    --head: #1F2D4A; --blue: #2F5D9A; --blue-tint: #E8EFF9; --hint: #8A93A0;
+    --icon: #4A4F57; --green: #2E7D5B; --green-tint: #EEF4F2; --red: #B03030;
+    --red-tint: #FBEFEF; --red-line: #E3B5B5; --page: #E6EBF2; --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page); color: var(--text);
+    font-family: "Segoe UI", Calibri, -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .panel {
+    position: relative; width: 100%; max-width: 440px; height: min(860px, calc(100vh - 56px));
+    background: linear-gradient(180deg, #FFFFFF 0%, var(--bg) 100%);
+    border: 1px solid var(--border); border-radius: 12px;
+    display: flex; flex-direction: column; box-shadow: 0 8px 28px rgba(31,45,74,.12);
+  }
+  header {
+    display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px;
+  }
+  header .title { font-weight: 700; color: var(--head); font-size: 15px; }
+  header .spark { width: 18px; height: 18px; color: #3A73C9; }
+  header .grow { flex: 1; }
+  header .icon { width: 18px; height: 18px; color: var(--text); opacity: .85; }
+  .advisor {
+    font: inherit; font-size: 12px; color: var(--head); background: var(--white);
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; cursor: pointer;
+  }
+  .runtime {
+    font-size: 11px; color: var(--hint); padding: 0 14px 6px; display: flex; gap: 6px; align-items: center;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hint); }
+  .dot.ai { background: #3A73C9; }
+  .msgs {
+    flex: 1; overflow-y: auto; padding: 8px 30px 8px 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .user {
+    align-self: flex-end; max-width: 80%; background: var(--pill); color: var(--text);
+    padding: 8px 14px; border-radius: 16px; font-size: 14px; line-height: 1.4; white-space: pre-wrap;
+  }
+  .bot { align-self: stretch; font-size: 14px; line-height: 1.45; }
+  .bot .text { white-space: pre-wrap; }
+  .tools { display: flex; gap: 14px; margin-top: 6px; color: var(--icon); }
+  .tools svg { width: 16px; height: 16px; }
+  .card {
+    background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-top: 2px; max-width: 94%;
+  }
+  .card.danger { border-color: var(--red-line); }
+  .card h4 { margin: 0 0 6px; font-size: 14px; color: var(--head); }
+  .card .q { font-weight: 700; color: var(--head); margin-bottom: 8px; }
+  .fields { margin: 0 0 8px; font-size: 13.5px; }
+  .fields div { display: flex; gap: 8px; padding: 2px 0; }
+  .fields span:first-child { color: var(--hint); min-width: 92px; }
+  .warn { font-style: italic; font-size: 13px; color: var(--hint); margin-bottom: 8px; }
+  .danger .warn { color: var(--red); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .opts.stack { grid-template-columns: 1fr; }
+  button.b {
+    font: inherit; font-size: 13px; cursor: pointer; border-radius: 999px; padding: 6px 14px;
+    border: 1px solid var(--border); background: var(--white); color: var(--hint);
+  }
+  button.b.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+  .danger button.b.primary { background: var(--red); border-color: var(--red); }
+  button.b.alt { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+  button.b.opt {
+    border-radius: 8px; border-color: var(--border); color: var(--blue); text-align: center; padding: 8px 10px;
+  }
+  button.b.opt.picked { background: var(--blue-tint); border: 1.5px solid var(--blue); font-weight: 600; }
+  button.b:disabled { cursor: default; opacity: .55; }
+  button.b.opt.picked:disabled, button.b.chosen:disabled { opacity: 1; }
+  .hint { font-size: 11.5px; color: var(--hint); font-style: italic; }
+  .done { display: flex; gap: 8px; align-items: flex-start; color: var(--green); font-weight: 600; }
+  .done svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+  .err { color: var(--red); }
+  .typing { display: flex; gap: 4px; padding: 4px 0; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--hint); animation: b 1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes b { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .guide {
+    position: absolute; right: -1px; top: 38%; background: var(--head); color: #fff;
+    writing-mode: vertical-rl; font-size: 11px; font-weight: 700; padding: 10px 5px;
+    border-radius: 6px 0 0 6px; user-select: none;
+  }
+  .composer { padding: 8px 14px 4px; }
+  .box {
+    background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px 6px;
+  }
+  .box textarea {
+    width: 100%; border: 0; outline: 0; resize: none; font: inherit; font-size: 14px;
+    color: var(--text); background: transparent; min-height: 22px; max-height: 120px;
+  }
+  .box .row { display: flex; align-items: center; gap: 10px; }
+  .box .row .grow { flex: 1; }
+  .box .row svg { width: 20px; height: 20px; }
+  .plus { color: var(--blue); } .mic { color: var(--hint); }
+  .send {
+    width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--blue); color: #fff;
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .send:disabled { opacity: .5; cursor: default; }
+  .send svg { width: 16px; height: 16px; }
+  .note { font-size: 10.5px; color: var(--hint); text-align: center; padding: 6px 14px 10px; line-height: 1.35; }
+  .below { font-size: 11px; color: #6B7684; margin-top: 10px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="demo-slot"></div>
+<div class="panel">
+  <header>
+    <svg class="spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/><path d="M5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z"/></svg>
+    <span class="title">NetX AI</span>
+    <span class="grow"></span>
+    <select id="advisor" class="advisor" title="Signed-in advisor (mock)"></select>
+    <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+  </header>
+  <div class="runtime"><span id="rdot" class="dot"></span><span id="rlabel">Connecting…</span></div>
+  <div id="msgs" class="msgs" aria-live="polite"></div>
+  <div class="guide">Guide Me</div>
+  <div class="composer">
+    <div class="box">
+      <textarea id="input" rows="1" placeholder="Ask NetX AI"></textarea>
+      <div class="row">
+        <svg class="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="grow"></span>
+        <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <button id="send" class="send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="note">Please note: AI can make mistakes. You are responsible for verifying accuracy of responses. All data shown here is synthetic.</div>
+</div>
+<div class="below">Demo · mock clients and cards · nothing reaches a real bank system</div>
+
+<script>
+const ICONS = {
+  tools: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
+       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+};
+const WELCOME = "Hi, I can help with your clients' debit cards: lock, unlock, replace, close permanently, report lost or stolen, and travel notices.";
+
+const $ = (id) => document.getElementById(id);
+const msgs = $("msgs"), input = $("input"), sendBtn = $("send"), advisorSel = $("advisor");
+let conversationId = null, busy = false;
+
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function scroll() { msgs.scrollTop = msgs.scrollHeight; }
+
+function addUser(text) { msgs.appendChild(el("div", "user", esc(text))); scroll(); }
+
+function addBot(inner, withTools = true) {
+  const b = el("div", "bot");
+  if (typeof inner === "string") b.appendChild(el("div", "text", esc(inner))); else b.appendChild(inner);
+  if (withTools) b.appendChild(el("div", "tools", ICONS.tools));
+  msgs.appendChild(b); scroll(); return b;
+}
+
+function lockCard(cardEl, chosenBtn) {
+  cardEl.querySelectorAll("button").forEach(b => b.disabled = true);
+  if (chosenBtn) chosenBtn.classList.add(chosenBtn.classList.contains("opt") ? "picked" : "chosen");
+}
+
+function renderChoice(card) {
+  const c = el("div", "card");
+  if (card.title) c.appendChild(el("h4", null, esc(card.title)));
+  if (card.message) c.appendChild(el("div", "q", esc(card.message)));
+  const acts = card.actions || [];
+  const longest = Math.max(...acts.map(a => a.label.length));
+  const opts = el("div", "opts" + (acts.length > 2 || longest > 22 ? " stack" : ""));
+  acts.forEach(a => {
+    const btn = el("button", "b opt", esc(a.label));
+    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    opts.appendChild(btn);
+  });
+  c.appendChild(opts);
+  return c;
+}
+
+function renderConfirm(card) {
+  const c = el("div", "card" + (card.danger ? " danger" : ""));
+  c.appendChild(el("h4", null, esc(card.title)));
+  const f = el("div", "fields");
+  (card.fields || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+  c.appendChild(f);
+  if (card.warning) c.appendChild(el("div", "warn", esc(card.warning)));
+  const btns = el("div", "btns");
+  (card.actions || []).forEach(a => {
+    const cls = a.style === "primary" ? "primary" : a.style === "alternative" ? "alt" : "";
+    const btn = el("button", "b " + cls, esc(a.label));
+    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    btns.appendChild(btn);
+  });
+  btns.appendChild(el("span", "hint", "nothing has run yet"));
+  c.appendChild(btns);
+  return c;
+}
+
+function renderReply(r) {
+  const card = r.card;
+  if (r.status === "error" && !card) { addBot(el("div", "text err", esc(r.message))); return; }
+  if (card && card.kind === "choice") {
+    const wrap = el("div");
+    wrap.appendChild(renderChoice(card));
+    addBot(wrap, false); return;
+  }
+  if (card && card.kind === "confirm") { addBot(renderConfirm(card), false); return; }
+  if (card && card.kind === "result") {
+    const main = (r.message || "").split("\n")[0];
+    addBot(el("div", "done", ICONS.check + `<span>${esc(main)}</span>`), !card.follow_up);
+    if (card.follow_up) addBot(card.follow_up);
+    return;
+  }
+  addBot(r.message || "");
+}
+
+function typing(on) {
+  let t = $("typing");
+  if (on && !t) { t = el("div", "bot"); t.id = "typing"; t.appendChild(el("div", "typing", "<i></i><i></i><i></i>")); msgs.appendChild(t); scroll(); }
+  if (!on && t) t.remove();
+}
+
+async function send(utterance, display) {
+  if (busy || !utterance.trim()) return;
+  busy = true; sendBtn.disabled = true;
+  addUser(display ?? utterance);
+  typing(true);
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json", ...demoHeaders() },
+      body: JSON.stringify({ advisor_id: advisorSel.value, conversation_id: conversationId, utterance })
+    });
+    const r = await res.json();
+    typing(false); renderReply(r);
+    if (res.status === 401 && window.DemoTools) window.DemoTools.askPasscode();
+  } catch (e) {
+    typing(false); addBot(el("div", "text err", "The demo server is not reachable. Is it still running?"));
+  } finally { busy = false; sendBtn.disabled = false; input.focus(); }
+}
+
+function newConversation() {
+  conversationId = advisorSel.value + ":" + Date.now();
+  msgs.innerHTML = "";
+  addBot(WELCOME);
+}
+
+function submit() { const t = input.value; input.value = ""; autosize(); send(t); }
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 120) + "px"; }
+
+sendBtn.onclick = submit;
+input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
+input.addEventListener("input", autosize);
+advisorSel.onchange = newConversation;
+
+function start() { newConversation(); input.focus(); }
+
+// Demo-only hook: the hosted team demo adds a passcode screen and a reset bar
+// (public/demo-tools.js). The product never needs it; without DEMO_MODE and
+// DEMO_PASSCODE the server does not offer that file and this does nothing.
+function demoHeaders() { return (window.DemoTools && window.DemoTools.headers()) || {}; }
+window.NetXChat = { start, newConversation };
+
+fetch("/api/info").then(r => r.json()).then(info => {
+  (info.advisors || ["ADV-1234"]).forEach(a => advisorSel.appendChild(new Option(a, a, false, a === info.default_advisor)));
+  $("rlabel").textContent = "Understanding: " + info.runtime_label;
+  if (info.runtime === "gpt") $("rdot").classList.add("ai");
+  if (info.demo_mode || info.passcode_required) {
+    const sc = document.createElement("script");
+    sc.src = "/demo-tools.js";
+    sc.onload = () => window.DemoTools.init(info);
+    document.body.appendChild(sc);
+  } else {
+    start();
+  }
+}).catch(() => { $("rlabel").textContent = "Server not reachable"; });
+</script>
+</body>
+</html>
