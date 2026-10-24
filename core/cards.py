@@ -18,7 +18,7 @@ def confirm_card(title: str, fields: list[tuple[str, str]],
                  warning: Optional[str] = None,
                  confirm_label: str = "Confirm",
                  extra_actions: Optional[list[dict]] = None,
-                 danger: bool = False) -> dict:
+                 danger: bool = False, ack: Optional[str] = None) -> dict:
     """
     Shown before anything runs. The buttons are the advisor's authorisation.
 
@@ -26,6 +26,8 @@ def confirm_card(title: str, fields: list[tuple[str, str]],
     {"label": "Change dates", "value": "change_dates"}. They never run the
     action; they send the advisor back to editing.
     danger: the action cannot be undone; the chat may draw Confirm in red.
+    ack: a statement the advisor must tick before Confirm works; the chat then
+    sends "confirm_ack" instead of "confirm" (checked again on the server).
     """
     return {
         "kind": "confirm",
@@ -33,6 +35,7 @@ def confirm_card(title: str, fields: list[tuple[str, str]],
         "fields": [{"label": k, "value": v} for k, v in fields],
         "warning": warning,
         "danger": danger,
+        "ack": ack,
         "actions": (
             [{"label": confirm_label, "value": "confirm", "style": "primary"}]
             + [{**a, "style": "alternative"} for a in (extra_actions or [])]
@@ -66,6 +69,20 @@ def choice_card(title: str, question: str, options: list[dict]) -> dict:
     }
 
 
+def address_input_card(title: str, question: str, extra: Optional[list[dict]] = None) -> dict:
+    """
+    An address field with suggestions as the advisor types (US and territories).
+    Picking a suggestion sends "address_pick:<id>|<apt line>"; the server looks the
+    full address up again - the browser never supplies the address itself.
+    """
+    return {
+        "kind": "address_input",
+        "title": title,
+        "message": question,
+        "actions": [{**a, "style": "secondary"} for a in (extra or [])],
+    }
+
+
 def to_text(card: dict) -> str:
     """Plain-text fallback. Same content, no rendering required."""
     if card is None:
@@ -77,6 +94,10 @@ def to_text(card: dict) -> str:
         lines.append(f"  {f['label']}: {f['value']}")
     if card.get("warning"):
         lines.append(f"  ! {card['warning']}")
+    if card.get("kind") == "address_input":
+        lines.append("  (type the address and pick a suggestion)")
+    if card.get("ack"):
+        lines.append(f"  [ ] {card['ack']}")
     actions = card.get("actions", [])
     if actions:
         if card.get("kind") == "choice":

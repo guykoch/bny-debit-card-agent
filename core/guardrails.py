@@ -104,11 +104,12 @@ def _check_volume(session, tool_name: str) -> None:
         return
     done = audit.recent_count(session.advisor_id, tool_name, settings.VOLUME_WINDOW_MINUTES)
     if done >= limit:
-        verb = {"close_card": "closed", "replace_card": "replaced",
-                "report_lost_stolen": "reported lost or stolen"}.get(tool_name, "changed")
+        what = {"close_card": "closed {n} cards", "replace_card": "replaced {n} cards",
+                "report_lost_stolen": "reported {n} cards lost or stolen",
+                "update_address": "changed {n} addresses"}.get(tool_name, "made {n} changes")
         raise NotPossible(
             "volume_limit",
-            f"You have {verb} {done} cards in the last {settings.VOLUME_WINDOW_MINUTES} "
+            f"You have {what.format(n=done)} in the last {settings.VOLUME_WINDOW_MINUTES} "
             "minutes. For safety, further requests of this kind are paused for now. "
             "Please try again later or contact operations.")
 
@@ -178,7 +179,8 @@ def _read(services, session, tool_name, ti) -> ToolResponse:
 
 def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     spec = ACTIONS[tool_name]
-    client_id, card_id = ti["client_id"], ti["card_id"]
+    client_id = ti["client_id"]
+    card_id = ti.get("card_id")
 
     # 1. entitlement
     # The audit records which side checked (setting in config/settings.py).
@@ -187,25 +189,32 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
         if not services.entitlements.can(session.advisor_id, client_id, tool_name):
             raise NotEntitled()
 
-    # 2. ownership
-    card = services.cards.get_card(card_id)
-    if card is None or card.client_id != client_id:
-        raise BadRequest("That card does not belong to this client.")
-
-    # state rules for this action (already locked, closed, pending, ...)
-    if spec.state_check:
-        spec.state_check(card)
+    if spec.client_level:
+        # Acts on the client's profile (update_address): no card involved.
+        target = services.clients.get(client_id)
+        if target is None:
+            raise BadRequest("Unknown client.")
+    else:
+        # 2. ownership
+        target = services.cards.get_card(card_id)
+        if target is None or target.client_id != client_id:
+            raise BadRequest("That card does not belong to this client.")
+        # state rules for this action (already locked, closed, pending, ...)
+        if spec.state_check:
+            spec.state_check(target)
     # rules for the filled-in values (dates, destinations, delivery address, ...)
     if spec.precheck:
-        spec.precheck(ti, card, services)
+        spec.precheck(ti, target, services)
     # unusual volume (runs at the panel and again at Confirm)
     _check_volume(session, tool_name)
 
     # 3. confirmation
     if not confirmed:
-        fields, warning = spec.summary(ti, card)
+        fields, warning = (spec.summary(ti, target, services) if spec.client_level
+                           else spec.summary(ti, target))
         card_payload = cards.confirm_card(spec.title, fields, warning, spec.confirm_label,
-                                          extra_actions=spec.extra_actions, danger=spec.danger)
+                                          extra_actions=spec.extra_actions, danger=spec.danger,
+                                          ack=spec.ack)
         if tool_name == "travel_notice":
             # lets the chat's date picker start from the dates shown
             card_payload["dates"] = {"start": ti["start_date"], "end": ti["end_date"],
@@ -216,11 +225,13 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
                             data={"tool": tool_name, "input": ti})
 
     # 4. action
-    result = spec.execute(services, session, ti, card)
+    result = spec.execute(services, session, ti, target)
 
     # 5. audit
     detail = {k: v for k, v in result.items() if k != "message"}
     detail["entitlement_checked_by"] = checked_by
+    if spec.ack:
+        detail["advisor_ticked"] = spec.ack
     audit.write(session, tool_name, client_id, card_id,
                 outcome=result.get("status", "ok"), model_interpretation=ti,
                 detail=detail)

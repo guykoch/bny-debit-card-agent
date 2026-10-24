@@ -30,6 +30,7 @@ from core.models import Card
 class ActionSpec:
     title: str
     execute: Callable            # (services, session, tool_input, card) -> dict
+                                 # client-level actions get the Client instead of a card
     summary: Callable            # (tool_input, card) -> (fields, warning)
     state_check: Optional[Callable] = None   # (card) -> None, raises NotPossible
     precheck: Optional[Callable] = None      # (tool_input, card, services) -> None, raises
@@ -39,6 +40,8 @@ class ActionSpec:
     danger: bool = False                  # cannot be undone; drawn in red
     follow_up: Optional[str] = None       # one sentence the chat adds after success
     follow_up_actions: Optional[list] = None   # buttons under that sentence
+    client_level: bool = False            # acts on the client's profile, not on a card
+    ack: Optional[str] = None             # a box the advisor must tick before Confirm
 
 
 # ---------------------------------------------------------------- shared bits
@@ -257,6 +260,59 @@ def _travel_summary(ti, card):
     ], None
 
 
+# ---------------------------------------------------------------- update address (profile)
+
+ADDRESS_ACK = "The client asked for this change and I verified their identity."
+
+
+def _addr_precheck(ti, client, services):
+    if client is None:
+        raise BadRequest("Unknown client.")
+    country, state = ti["new_country"].upper(), ti["new_state"].upper()
+    if country != "US" or not places.us_region(state):
+        raise NotPossible("address_not_us", "Addresses must be in the United States or a "
+                                            "US territory.")
+    profile = services.clients.addresses(client.client_id)
+    new = places.normalise_address(ti["new_address"])
+    if any(places.normalise_address(a.address) == new for a in profile):
+        raise NotPossible("address_exists", "That address is already in the client's profile.")
+    if ti["mode"] == "change_profile_address":
+        labels = [a.label for a in profile]
+        if not ti.get("address_label") and len(labels) == 1:
+            ti["address_label"] = labels[0]
+        if ti.get("address_label") not in labels:
+            raise BadRequest("Which profile address should change?")
+
+
+def _addr_summary(ti, client, services=None):
+    fields = [("Client", client.name), ("Account", f"...{client.account_last4}")]
+    if ti["mode"] == "change_profile_address":
+        old = next((a.address for a in services.clients.addresses(client.client_id)
+                    if a.label == ti["address_label"]), "") if services else ""
+        fields += [("Change", ti["address_label"]), ("From", old), ("To", ti["new_address"])]
+        warning = ("This changes the address in the client's profile. Cards already ordered "
+                   "are not redirected.")
+    else:
+        fields += [("Add delivery address", ti["new_address"])]
+        warning = "This adds the address to the client's profile, so replacement cards can be sent there."
+    return fields, warning
+
+
+def _addr_execute(svc, session, ti, client):
+    from core.models import Address
+    new = Address(label="", address=ti["new_address"], state=ti["new_state"].upper(),
+                  country=ti["new_country"].upper())
+    if ti["mode"] == "change_profile_address":
+        svc.clients.change_address(client.client_id, ti["address_label"], new)
+        return {"status": "address_changed", "label": ti["address_label"],
+                "message": f"{client.name}'s {ti['address_label'].lower()} address is now "
+                           f"{ti['new_address']}."}
+    new.label = f"Delivery (added {date.today():%d %b %Y})"
+    svc.clients.add_address(client.client_id, new)
+    return {"status": "address_added", "label": new.label,
+            "message": f"Delivery address added to {client.name}'s profile: {ti['new_address']}."}
+
+
 # ---------------------------------------------------------------- registry
 
 REPLACEMENT_OFFER = [{"label": "Yes, order a replacement", "value": "Yes, order a replacement"},
@@ -292,4 +348,9 @@ ACTIONS: dict[str, ActionSpec] = {
         title="Add travel notice", execute=_travel_execute,
         summary=_travel_summary, state_check=_travel_state, precheck=_travel_precheck,
         extra_actions=[{"label": "Change dates", "value": "change_dates"}]),
+
+    "update_address": ActionSpec(
+        title="Update client address", execute=_addr_execute,
+        summary=_addr_summary, precheck=_addr_precheck,
+        confirm_label="Confirm address", danger=True, client_level=True, ack=ADDRESS_ACK),
 }

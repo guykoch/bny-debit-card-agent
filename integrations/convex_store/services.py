@@ -19,6 +19,7 @@ from integrations.convex_store.client import ConvexClient
 from integrations.mock import dataset as data
 
 _CARDS_CSV = os.path.join(os.path.dirname(data.__file__), "data", "cards.csv")
+_ADDRESSES_CSV = os.path.join(os.path.dirname(data.__file__), "data", "addresses.csv")
 _DEFAULTS_CHECKED = False
 
 
@@ -27,18 +28,46 @@ def default_cards() -> list[dict]:
     return [dict(c) for c in data.CARDS]
 
 
+def default_addresses() -> list[dict]:
+    """The saved default profile addresses: addresses.csv, one row per address."""
+    return [{"client_id": cid, **a} for cid, rows in data.ADDRESSES.items() for a in rows]
+
+
 def defaults_version() -> str:
-    with open(_CARDS_CSV, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()[:16]
+    h = hashlib.sha256()
+    for path in (_CARDS_CSV, _ADDRESSES_CSV):
+        with open(path, "rb") as f:
+            h.update(f.read())
+    return h.hexdigest()[:16]
 
 
 def ensure_defaults(client: ConvexClient) -> dict:
-    """Save the default state in Convex (once per process) and seed an empty table."""
+    """Save the default state in Convex (once per process) and seed empty tables."""
     global _DEFAULTS_CHECKED
     result = client.mutation("ensureDefaults", version=defaults_version(),
-                             cards=default_cards())
+                             cards=default_cards(), addresses=default_addresses())
     _DEFAULTS_CHECKED = True
     return result
+
+
+class ConvexAddressBook:
+    """Profile addresses in Convex, so a change made by one teammate is seen by all."""
+    def __init__(self, client: ConvexClient):
+        self.client = client
+
+    def list(self, client_id: str) -> list[dict]:
+        return [{k: d[k] for k in ("label", "address", "state", "country")}
+                for d in self.client.query("listAddresses", client_id=client_id)]
+
+    def add(self, client_id: str, row: dict) -> None:
+        self.client.mutation("addAddress", client_id=client_id,
+                             label=row["label"], address=row["address"],
+                             state=row.get("state", ""), country=row.get("country", "US"))
+
+    def update(self, client_id: str, label: str, row: dict) -> bool:
+        return bool(self.client.mutation("updateAddress", client_id=client_id, label=label,
+                                         address=row["address"], state=row.get("state", ""),
+                                         country=row.get("country", "US")))
 
 
 class ConvexCardSystem:

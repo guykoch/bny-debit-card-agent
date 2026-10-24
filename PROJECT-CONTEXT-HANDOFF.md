@@ -17,7 +17,7 @@
 >
 > **First actions in the new chat:**
 > 1. Unzip `debit-card-agent.zip` and run the four test suites and the demo (section 5.9).
->    Expect 23 + 39 + 18 + 42 + 20 + 57 passing (`test_guardrails`, `test_skills`, `test_choices`, `test_llm_runtime`, `test_hosting`, `test_fixes`). None needs an API key
+>    Expect 23 + 44 + 18 + 42 + 20 + 65 + 32 passing (`test_guardrails`, `test_skills`, `test_choices`, `test_llm_runtime`, `test_hosting`, `test_fixes`, `test_addresses`). None needs an API key
 >    or network.
 > 2. Read the code you are about to change before changing it. The descriptions here
 >    are accurate as of today, but the files are the truth.
@@ -786,7 +786,16 @@ checks, by tracker test ID). Key changes:
   delivery address and ambiguous places; card-state answers from code; PIN
   requests get a fixed reply; `switch_action` replaces "I'll do that instead";
   "Did you mean?" for near spellings; city and birth year in "Which client?".
-- No change in `convex-demo-db/`; a push redeploys Vercel.
+- Later (F-26, F-27): options are always buttons (panels kept in history as question + note;
+  model-written lists turned into buttons); a typo in the action gets "Did you mean...?" Yes/No.
+- New 7th skill **update-address** (F-28) with address search (F-29, Google Places when
+  `GOOGLE_MAPS_API_KEY` is set, else a demo list; US + territories; key server-side only).
+  Change a profile address or add a delivery address; red panel + "client verified" tick box
+  (`confirm_ack`); "A different address" in a replacement adds it, then returns to the
+  replacement. Profile addresses live in Convex (`addresses` table) on the hosted demo, so
+  `npx convex deploy` was needed for this change.
+- The conversation snapshot now also keeps the task's `form` and `resume`, so code-built
+  buttons continue without a model call after save/restore.
 
 ## 10. Known gaps and inconsistencies (verified against the code — fix only when asked)
 

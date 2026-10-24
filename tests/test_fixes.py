@@ -141,8 +141,8 @@ def run():
     m, svc, conv, r = replace_flow("Jane's card is cracked, send her a new one",
                                    "Jane Miller", "C-88210", "CARD-4417", reason="damaged")
     r = conv.send("A different address")
-    check("T-12b", "'A different address' explains the profile rule, no contradiction",
-          "add it to the client's profile in NetX360" in r.message
+    check("T-12b", "'A different address' opens the address search (added to the profile)",
+          r.card["kind"] == "address_input" and "added to the client's profile" in r.card["message"]
           and "account-level" not in r.message)
 
     print("\nF-20 / F-16  Reason buttons, the same every time")
@@ -289,7 +289,7 @@ def run():
     m = ScriptedModel({"role": "assistant", "content": '{"skill": "unclear"}'})
     _, conv = fresh(m)
     r = conv.send("do the card thing for jane")
-    check("T-14a", "six actions offered as buttons", len(labels(r)) == 6)
+    check("T-14a", "the actions offered as buttons", len(labels(r)) == 7)
     m.add(call("find_client", query="Jane Miller"), call("list_cards", client_id="C-88210"),
           say("Where is Jane travelling, and when?"))
     r = conv.send("Add a travel notice")
@@ -387,7 +387,7 @@ def run():
     _, conv = fresh(m)
     conv.send("lo Sarah Chen's card")
     r = conv.send("No, something else")
-    check("T-27b", "No: the six actions as buttons", len(labels(r)) == 6
+    check("T-27b", "No: the actions as buttons", len(labels(r)) == 7
           and r.card["title"] == "Which action?")
     m = ScriptedModel(route("lock-card"), call("find_client", query="Sarah Chen"))
     _, conv = fresh(m)

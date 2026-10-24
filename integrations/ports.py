@@ -39,6 +39,14 @@ class ClientDirectory(Protocol):
         """Every address in the client's profile. Replacements may only go to one of these."""
         ...
 
+    def add_address(self, client_id: str, address: Address) -> None:
+        """Add an address to the client's profile (e.g. a new delivery address)."""
+        ...
+
+    def change_address(self, client_id: str, label: str, address: Address) -> bool:
+        """Replace the profile address saved under `label`."""
+        ...
+
 
 class EntitlementService(Protocol):
     """

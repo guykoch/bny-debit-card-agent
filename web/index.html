@@ -104,6 +104,22 @@
     border-radius: 8px; color: var(--text); background: var(--white); }
   .dates .dh { font-size: 11.5px; color: var(--hint); margin-bottom: 8px; }
   .dates .dh.err { color: var(--red); }
+  .notice { font-size: 12.5px; color: var(--red); margin-bottom: 8px; }
+  .okline { display: flex; gap: 6px; color: var(--green); font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+  .okline svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+  .ack { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--text);
+    margin: 4px 0 10px; cursor: pointer; }
+  .ack input { margin-top: 2px; width: 16px; height: 16px; flex: none; }
+  .addr input { width: 100%; font: inherit; font-size: 14px; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); background: var(--white); margin-bottom: 6px; }
+  .addr .sugs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+  .addr .sug { text-align: left; border: 1px solid var(--border); border-radius: 8px; background: var(--white);
+    padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px; color: var(--text); }
+  .addr .sug b { color: var(--head); font-weight: 600; }
+  .addr .sug span { color: var(--hint); }
+  .addr .sug:hover { border-color: var(--blue); background: var(--blue-tint); }
+  .addr .pw { font-size: 10.5px; color: var(--hint); margin-bottom: 8px; }
+  @media (max-width: 600px) { .addr input { font-size: 16px; } }
   .done { display: flex; gap: 8px; align-items: flex-start; color: var(--green); font-weight: 600; }
   .done svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
   .err { color: var(--red); }
@@ -209,6 +225,7 @@ function lockCard(cardEl, chosenBtn) {
 
 function renderChoice(card) {
   const c = el("div", "card");
+  topLines(c, card);
   if (card.title) c.appendChild(el("h4", null, esc(card.title)));
   if (card.message) c.appendChild(el("div", "q", esc(card.message)));
   const acts = card.actions || [];
@@ -260,18 +277,86 @@ function datePicker(cardEl, d) {
   box.scrollIntoView({ block: "nearest" });
 }
 
+function topLines(c, card) {
+  if (card.note) c.appendChild(el("div", "okline", ICONS.check + `<span>${esc(card.note)}</span>`));
+  if (card.notice) c.appendChild(el("div", "notice", esc(card.notice)));
+}
+
+// Address field with suggestions while typing (US + territories). The server
+// looks the picked address up again; the browser only sends the suggestion id.
+function renderAddress(card) {
+  const c = el("div", "card addr");
+  topLines(c, card);
+  if (card.title) c.appendChild(el("h4", null, esc(card.title)));
+  if (card.message) c.appendChild(el("div", "q", esc(card.message)));
+  const q = el("input"); q.type = "text"; q.placeholder = "Start typing an address…"; q.autocomplete = "off";
+  const apt = el("input"); apt.type = "text"; apt.placeholder = "Apt, suite, unit (optional)"; apt.autocomplete = "off";
+  const sugs = el("div", "sugs"), pw = el("div", "pw", "");
+  c.appendChild(q); c.appendChild(apt); c.appendChild(sugs); c.appendChild(pw);
+  const session = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^a-zA-Z0-9-]/g, "");
+  let timer = null, seq = 0;
+  q.oninput = () => {
+    clearTimeout(timer);
+    const text = q.value.trim();
+    if (text.length < 3) { sugs.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try {
+        const res = await fetch(`/api/address/suggest?q=${encodeURIComponent(text)}&session=${session}`, { headers: demoHeaders() });
+        const out = await res.json();
+        if (mine !== seq) return;
+        sugs.innerHTML = "";
+        pw.textContent = out.provider === "google" ? "Suggestions powered by Google" : "Demo address list";
+        if (!(out.suggestions || []).length) { sugs.appendChild(el("div", "hint", "No matching US address yet - keep typing.")); return; }
+        out.suggestions.forEach(sg => {
+          const b = el("button", "sug", `<b>${esc(sg.main || sg.text)}</b> <span>${esc(sg.secondary || "")}</span>`);
+          b.onclick = () => {
+            if (busy) return;
+            const unit = apt.value.trim().replace(/[|]/g, " ");
+            lockCard(c, b);
+            send(`address_pick:${sg.id}|${unit}`, sg.text + (unit ? ` (${unit})` : ""));
+          };
+          sugs.appendChild(b);
+        });
+      } catch (e) { sugs.innerHTML = ""; sugs.appendChild(el("div", "hint", "Address search is not available right now.")); }
+    }, 250);
+  };
+  const btns = el("div", "btns");
+  (card.actions || []).forEach(a => {
+    const btn = el("button", "b", esc(a.label));
+    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    btns.appendChild(btn);
+  });
+  c.appendChild(btns);
+  setTimeout(() => q.focus(), 50);
+  return c;
+}
+
 function renderConfirm(card) {
   const c = el("div", "card" + (card.danger ? " danger" : ""));
+  topLines(c, card);
   c.appendChild(el("h4", null, esc(card.title)));
   const f = el("div", "fields");
   (card.fields || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
   c.appendChild(f);
   if (card.warning) c.appendChild(el("div", "warn", esc(card.warning)));
+  let tick = null;
+  if (card.ack) {                                   // a box the advisor must tick first
+    const lab = el("label", "ack");
+    tick = el("input"); tick.type = "checkbox";
+    lab.appendChild(tick); lab.appendChild(el("span", null, esc(card.ack)));
+    c.appendChild(lab);
+  }
   const btns = el("div", "btns");
   (card.actions || []).forEach(a => {
     const cls = a.style === "primary" ? "primary" : a.style === "alternative" ? "alt" : "";
     const btn = el("button", "b " + cls, esc(a.label));
     if (a.value === "change_dates" && card.dates) btn.onclick = () => { if (!busy) datePicker(c, card.dates); };
+    else if (a.value === "confirm" && tick) {
+      btn.disabled = true;
+      tick.onchange = () => { btn.disabled = !tick.checked; };
+      btn.onclick = () => { if (busy || !tick.checked) return; lockCard(c, btn); send("confirm_ack", a.label); };
+    }
     else btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
     btns.appendChild(btn);
   });
@@ -289,6 +374,7 @@ function renderReply(r) {
     addBot(wrap, false); return;
   }
   if (card && card.kind === "confirm") { addBot(renderConfirm(card), false); return; }
+  if (card && card.kind === "address_input") { addBot(renderAddress(card), false); return; }
   if (card && card.kind === "result") {
     const main = (r.message || "").split("\n")[0];
     addBot(el("div", "done", ICONS.check + `<span>${esc(main)}</span>`), !card.follow_up);

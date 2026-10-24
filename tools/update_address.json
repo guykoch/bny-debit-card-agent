@@ -1,0 +1,30 @@
+{
+  "name": "update_address",
+  "access": "write",
+  "description": "Change an address in the client's profile, or add a new delivery address to the profile for a replacement card.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client. Never invent one."
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["change_profile_address", "add_delivery_address"],
+        "description": "Leave this out unless the advisor already said it. The system asks for it with buttons."
+      },
+      "address_label": {
+        "type": "string",
+        "description": "Which profile address to change (its label, e.g. Home). Leave this out; the system asks with buttons when there is more than one."
+      },
+      "new_address": {
+        "type": "string",
+        "description": "Never fill this. The advisor picks the new address from address suggestions shown by the system."
+      },
+      "new_state": {"type": "string", "description": "Never fill this; set by the system."},
+      "new_country": {"type": "string", "description": "Never fill this; set by the system."}
+    },
+    "required": ["client_id", "mode", "new_address", "new_state", "new_country"]
+  }
+}

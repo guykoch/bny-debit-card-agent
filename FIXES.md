@@ -61,6 +61,17 @@ in the demo are on the tracker's Tests sheet.
 | F-26 | Options are always buttons: panels are kept in the model's history as a question plus a note (never a numbered list it could copy), and any list the model still writes as text is turned into buttons by code | llm_runtime `_say`, `_text_or_buttons` |
 | F-27 | Typo in the action ("lo Sarah Chen's card"): the router marks it uncertain and code asks "Did you mean: lock the card?" Yes / No before going on; No shows the six actions | llm_runtime `_route` (`certain`), `_picked` |
 
-## Nothing to redeploy in Convex
+## New feature: update an address, with address search
 
-No change in `convex-demo-db/`. A push to GitHub is enough.
+| Item | What changed | Where |
+|---|---|---|
+| F-28 | New action **update address** (7th skill). The chat asks with buttons: change an address in the client's profile, or add a new delivery address for a replacement card. With more than one profile address, it asks which one. The new address comes only from the address search; the confirm panel is red and needs the advisor to tick "The client asked for this change and I verified their identity" (logged). After adding a delivery address it offers the replacement; from inside a replacement ("A different address") it adds the address and goes straight back to the replacement panel. | `skills/debit-card/update-address/`, `tools/update_address.json`, handlers `_addr_*`, llm_runtime `_ask_missing`, `_address_answer`, `_start_new_delivery`, `_after_address` |
+| F-29 | Address search (autofill) for every address entry: Google Places (New) when `GOOGLE_MAPS_API_KEY` is set, otherwise a built-in demo list; US and territories only; the key stays on the server; the picked address is looked up again on the server. Apartment / suite line optional. | `integrations/address_lookup.py`, `/api/address/suggest`, web/index.html `renderAddress` |
+
+Profile addresses now change during a demo, so they live in Convex on the hosted
+demo (new `addresses` table; Reset restores them from `addresses.csv`).
+
+## Redeploy Convex this time
+
+`convex-demo-db/` changed (addresses table and functions). After pushing, run
+`npx convex deploy` from `convex-demo-db/` once.

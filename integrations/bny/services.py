@@ -55,6 +55,12 @@ class BnyClientDirectory:
     def addresses(self, client_id: str):
         raise NotImplementedError("Map to the addresses in the client's profile.")
 
+    def add_address(self, client_id: str, address) -> None:
+        raise NotImplementedError("Map to BNY's client-profile address maintenance.")
+
+    def change_address(self, client_id: str, label: str, address) -> bool:
+        raise NotImplementedError("Map to BNY's client-profile address maintenance.")
+
 
 class BnyCardSystem:
     """

@@ -85,6 +85,52 @@ export const insertCard = mutation({
   },
 });
 
+// ------------------------------------------------------------------ profile addresses
+
+const addressFields = {
+  client_id: v.string(),
+  label: v.string(),
+  address: v.string(),
+  state: v.string(),
+  country: v.string(),
+};
+
+export const listAddresses = query({
+  args: { secret: v.string(), client_id: v.string() },
+  handler: async (ctx, { secret, client_id }) => {
+    checkSecret(secret);
+    const docs = await ctx.db
+      .query("addresses")
+      .withIndex("by_client", (q) => q.eq("client_id", client_id))
+      .collect();
+    return docs.map(plain);
+  },
+});
+
+export const addAddress = mutation({
+  args: { secret: v.string(), ...addressFields },
+  handler: async (ctx, { secret, ...row }) => {
+    checkSecret(secret);
+    await ctx.db.insert("addresses", row);
+    return row;
+  },
+});
+
+export const updateAddress = mutation({
+  args: { secret: v.string(), ...addressFields },
+  handler: async (ctx, { secret, client_id, label, address, state, country }) => {
+    checkSecret(secret);
+    const docs = await ctx.db
+      .query("addresses")
+      .withIndex("by_client", (q) => q.eq("client_id", client_id))
+      .collect();
+    const doc = docs.find((d) => d.label === label);
+    if (!doc) return false;
+    await ctx.db.patch(doc._id, { address, state, country });
+    return true;
+  },
+});
+
 // ------------------------------------------------------------------ travel notices, flags
 
 export const addTravelNotice = mutation({
@@ -181,8 +227,13 @@ export const listAudit = query({
 // Called by the server on start-up. Saves the default cards (from cards.csv)
 // if they are missing or the CSV changed, and fills an empty `cards` table.
 export const ensureDefaults = mutation({
-  args: { secret: v.string(), version: v.string(), cards: v.array(v.object(cardFields)) },
-  handler: async (ctx, { secret, version, cards }) => {
+  args: {
+    secret: v.string(),
+    version: v.string(),
+    cards: v.array(v.object(cardFields)),
+    addresses: v.optional(v.array(v.object(addressFields))),
+  },
+  handler: async (ctx, { secret, version, cards, addresses }) => {
     checkSecret(secret);
     const saved = await ctx.db
       .query("defaults")
@@ -190,16 +241,21 @@ export const ensureDefaults = mutation({
       .first();
     let updated = false;
     if (!saved) {
-      await ctx.db.insert("defaults", { key: "cards", version, cards });
+      await ctx.db.insert("defaults", { key: "cards", version, cards, addresses });
       updated = true;
     } else if (saved.version !== version) {
-      await ctx.db.patch(saved._id, { version, cards });
+      await ctx.db.patch(saved._id, { version, cards, addresses });
       updated = true;
     }
     const anyCard = await ctx.db.query("cards").first();
     let seeded = false;
     if (!anyCard) {
       for (const card of cards) await ctx.db.insert("cards", card);
+      seeded = true;
+    }
+    const anyAddress = await ctx.db.query("addresses").first();
+    if (!anyAddress && addresses) {
+      for (const a of addresses) await ctx.db.insert("addresses", a);
       seeded = true;
     }
     return { defaults_updated: updated, seeded };
@@ -217,12 +273,17 @@ export const reset = mutation({
       .first();
     if (!saved) throw new Error("No saved default state yet. Start the server once first.");
     const counts: Record<string, number> = {};
-    for (const table of ["cards", "travel_notices", "flags", "conversations", "audit"] as const) {
+    for (const table of ["cards", "addresses", "travel_notices", "flags", "conversations", "audit"] as const) {
       const docs = await ctx.db.query(table).collect();
       for (const d of docs) await ctx.db.delete(d._id);
       counts[table] = docs.length;
     }
     for (const card of saved.cards) await ctx.db.insert("cards", card);
-    return { cleared: counts, restored_cards: saved.cards.length };
+    for (const a of saved.addresses ?? []) await ctx.db.insert("addresses", a);
+    return {
+      cleared: counts,
+      restored_cards: saved.cards.length,
+      restored_addresses: (saved.addresses ?? []).length,
+    };
   },
 });

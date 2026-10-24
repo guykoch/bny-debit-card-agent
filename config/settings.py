@@ -67,6 +67,12 @@ CONFIRM_REQUIRED_FOR_WRITES = True             # never set False in production
 # added to the profile in NetX360. PO boxes: still to confirm with Ben.
 REPLACEMENT_ALLOW_PO_BOX = True
 
+# Address suggestions while typing (autofill). "auto": Google Places when
+# GOOGLE_MAPS_API_KEY is set, otherwise a small built-in sample list.
+# The key is used only on the server; the browser never sees it.
+ADDRESS_PROVIDER = os.environ.get("DCA_ADDRESS_PROVIDER", "auto")   # auto | google | sample
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+
 # Pending cards (issued, not yet activated) - decision D-03, still open with Ben.
 # Default: lock it, or order a replacement (e.g. it never arrived). Everything
 # else is refused with a clear message.
@@ -74,7 +80,8 @@ PENDING_CARD_ACTIONS = {"lock_card", "replace_card"}
 
 # Unusual volume (decision D-06, team default): at most this many completed
 # actions of one kind per advisor in the time window. Agree real numbers with BNY.
-VOLUME_LIMITS = {"close_card": 3, "replace_card": 5, "report_lost_stolen": 5}
+VOLUME_LIMITS = {"close_card": 3, "replace_card": 5, "report_lost_stolen": 5,
+                 "update_address": 3}
 VOLUME_WINDOW_MINUTES = 10
 
 
@@ -145,12 +152,14 @@ def build_services() -> Services:
         from integrations.mock.services import (
             MockCardSystem, MockClientDirectory, MockEntitlementService)
         ent = MockEntitlementService()
+        book = None
         if active_store() == "convex":
-            from integrations.convex_store.services import ConvexCardSystem
+            from integrations.convex_store.services import ConvexAddressBook, ConvexCardSystem
             cards = ConvexCardSystem()
+            book = ConvexAddressBook(cards.client)
         else:
             cards = MockCardSystem()
-        return Services(clients=MockClientDirectory(ent), entitlements=ent, cards=cards)
+        return Services(clients=MockClientDirectory(ent, book), entitlements=ent, cards=cards)
 
     if MODE == "bny":
         from integrations.bny.services import (

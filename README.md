@@ -52,6 +52,7 @@ python -m tests.test_choices       # typed answers to "which card / which client
 python -m tests.test_llm_runtime   # the code around GPT-5.4, with a scripted model
 python -m tests.test_hosting       # save/restore between messages, passcode, reset
 python -m tests.test_fixes         # every fix from team testing, by tracker test ID (see FIXES.md)
+python -m tests.test_addresses     # update address + address search (autofill)
 python -m demo.run_demo            # a scripted conversation (keyword stand-in)
 ```
 
@@ -62,7 +63,7 @@ through every file in about fifteen minutes.
 
 ## The idea in one paragraph
 
-The advisor types a sentence. GPT-5.4 routes it to one of six skills — one per
+The advisor types a sentence. GPT-5.4 routes it to one of seven skills — one per
 action — then reads that skill plus the shared rules and fills in its single
 tool's form. That is the only AI. The form is checked against its schema, then
 our code - not the model - decides whether the action happens: is this advisor
@@ -77,7 +78,7 @@ skills/debit-card/             one skill per action, plus _shared.md
 core/skills.py                 the skill registry: routing, prompts, tool lists
 tools/*.json                   eight tool schemas; the forms the model fills in
 core/guardrails.py             THE IMPORTANT ONE - the steps, in order
-core/handlers.py               what differs between the six actions
+core/handlers.py               what differs between the seven actions
 core/schemas.py                loads and validates the forms
 core/cards.py                  the A2UI card payloads, plus a text fallback
 core/audit.py                  the permanent record

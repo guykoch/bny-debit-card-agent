@@ -40,6 +40,8 @@ def _headers(environ) -> dict:
 def app(environ, start_response):
     method = environ.get("REQUEST_METHOD", "GET").upper()
     path = environ.get("PATH_INFO", "/") or "/"
+    if environ.get("QUERY_STRING"):
+        path += "?" + environ["QUERY_STRING"]
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
     except ValueError:

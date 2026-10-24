@@ -66,6 +66,7 @@ Vercel → your project → **Settings → Environment Variables** (Production):
 | `DEMO_SERVER_SECRET` | the value from step 1 |
 | `DEMO_MODE` | `true` |
 | `DEMO_PASSCODE` | your team passcode, e.g. `corestone-amber-7429` |
+| `GOOGLE_MAPS_API_KEY` | optional: address suggestions from Google (see "Address search" below). Without it, a built-in demo list is used |
 
 ### 6. Put the code on GitHub and deploy
 
@@ -90,6 +91,25 @@ The first message after a deploy saves the default state in Convex (from
 seconds longer.
 
 ---
+
+## Address search (Google Places)
+
+The address field (update address, new delivery address) suggests addresses as
+the advisor types, limited to the US and its territories. With no key it uses a
+small built-in list; with a key it uses Google Places.
+
+1. In Google Cloud Console, create (or pick) a project and turn on billing
+   (Google gives a monthly free allowance).
+2. **APIs & Services → Library →** enable **Places API (New)**.
+3. **APIs & Services → Credentials → Create credentials → API key.** Edit it:
+   under *API restrictions* choose **Restrict key → Places API (New)**. Leave
+   *Application restrictions* as **None** (the key is used only by the server,
+   never in the browser).
+4. In Vercel, add `GOOGLE_MAPS_API_KEY` = that key, then redeploy.
+
+The chat shows "Suggestions powered by Google" under the field when Google is
+used, and "Demo address list" otherwise. If Google does not answer, the chat
+falls back to the demo list automatically.
 
 ## Everyday use
 

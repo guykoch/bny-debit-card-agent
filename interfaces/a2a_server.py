@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import urllib.parse
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -119,7 +120,10 @@ def info() -> dict:
             # demo-only switches (see demo_tools/)
             "demo_mode": settings.DEMO_MODE,
             "passcode_required": bool(settings.DEMO_PASSCODE),
-            "max_travel_days": settings.MAX_TRAVEL_DAYS}
+            "max_travel_days": settings.MAX_TRAVEL_DAYS,
+            "address_provider": ("google" if settings.ADDRESS_PROVIDER == "google" or
+                                 (settings.ADDRESS_PROVIDER == "auto"
+                                  and settings.GOOGLE_MAPS_API_KEY) else "sample")}
 
 
 def list_audit() -> list:
@@ -139,7 +143,9 @@ def passcode_ok(headers) -> bool:
 
 def route(method: str, path: str, headers, body: bytes):
     """All endpoints, shared by the local server and Vercel. Returns (code, type, bytes)."""
-    path = path.split("?")[0].rstrip("/") or "/"
+    path, _, query = path.partition("?")
+    path = path.rstrip("/") or "/"
+    params = {k: v[0] for k, v in urllib.parse.parse_qs(query).items()}
 
     def js(code, obj):
         return code, "application/json", json.dumps(obj).encode()
@@ -162,6 +168,10 @@ def route(method: str, path: str, headers, body: bytes):
         return js(401, {"status": "error", "message": "Passcode required.", "card": None})
     if method == "GET" and path == "/api/audit":
         return js(200, list_audit())
+    if method == "GET" and path == "/api/address/suggest":
+        # Address autofill. The provider key (Google) stays on this server.
+        from integrations import address_lookup
+        return js(200, address_lookup.suggest(params.get("q", ""), params.get("session", "")))
     if method == "POST" and path in ("/", "/api/chat"):
         try:
             payload = json.loads(body or b"{}")

@@ -13,7 +13,18 @@ const card = {
   address_on_file: v.string(),
 };
 
+const address = {
+  client_id: v.string(),
+  label: v.string(), // "Home", "Vacation home", "Delivery (added 24 Oct 2026)"
+  address: v.string(),
+  state: v.string(), // two-letter US state / territory code
+  country: v.string(),
+};
+
 export default defineSchema({
+  // Each client's profile addresses. Replacement cards may only go to these.
+  addresses: defineTable(address).index("by_client", ["client_id"]),
+
   // The live cards. Changed by lock, unlock, replace, close, report lost/stolen.
   cards: defineTable(card)
     .index("by_card", ["card_id"])
@@ -39,12 +50,14 @@ export default defineSchema({
   // The audit trail (one row per confirmed action or refusal that is logged).
   audit: defineTable({ row: v.any(), at: v.number() }),
 
-  // THE SAVED DEFAULT STATE. Written from integrations/mock/data/cards.csv the
-  // first time the server starts (and again whenever that CSV changes).
-  // "Reset demo data" copies it back into `cards` and empties everything else.
+  // THE SAVED DEFAULT STATE. Written from integrations/mock/data/cards.csv and
+  // addresses.csv the first time the server starts (and whenever they change).
+  // "Reset demo data" copies it back into `cards` and `addresses` and empties
+  // everything else.
   defaults: defineTable({
     key: v.string(), // always "cards"
-    version: v.string(), // fingerprint of the CSV
+    version: v.string(), // fingerprint of the CSVs
     cards: v.array(v.object(card)),
+    addresses: v.optional(v.array(v.object(address))),
   }).index("by_key", ["key"]),
 });

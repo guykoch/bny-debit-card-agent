@@ -49,6 +49,7 @@ from config import settings
 from core import cards, places, skills
 from core.errors import AgentError
 from core.guardrails import check_card_state, check_permission, dispatch
+from integrations import address_lookup
 from core.handlers import allowed_addresses
 from core.models import Session, ToolResponse
 from interfaces.llm_client import ModelUnavailable, OpenAIChatClient, tool_schema_for_model
@@ -56,7 +57,8 @@ from interfaces.local_runtime import (CHANGE_DATES, NO, PIN_REPLY, YES, Conversa
                                       apply_new_dates, is_pin_request, with_follow_up)
 
 OUT_OF_SCOPE = ("I can help with your clients' debit cards: lock, unlock, replace, close "
-                "permanently, report lost or stolen, and travel notices. For anything else, "
+                "permanently, report lost or stolen, travel notices, and the addresses cards "
+                "are sent to. For anything else, "
                 "please use the usual NetX360 screens.")
 
 # Said when a reply sounds like an action happened although nothing ran (F-10).
@@ -112,7 +114,9 @@ def _switch_tool() -> dict:
 CODE_ASKED = {
     "replace_card": ["reason", "delivery_address", "flag_transactions"],
     "report_lost_stolen": ["incident_type", "flag_transactions"],
+    "update_address": ["mode", "address_label", "new_address", "new_state", "new_country"],
 }
+ADDRESS_FIELDS = ("new_address", "new_state", "new_country")   # only from the address search
 
 REASON_LABELS = {"damaged": "Damaged", "lost": "Lost", "stolen": "Stolen",
                  "expiring": "Expiring", "not received": "Never received", "other": "Other"}
@@ -120,7 +124,14 @@ REASON_LABELS = {"damaged": "Damaged", "lost": "Lost", "stolen": "Stolen",
 ACTION_LABELS = {"lock-card": "Lock the card", "unlock-card": "Unlock the card",
                  "replace-card": "Replace the card", "close-card": "Close the card permanently",
                  "report-lost-stolen": "Report it lost or stolen",
-                 "travel-notice": "Add a travel notice"}
+                 "travel-notice": "Add a travel notice",
+                 "update-address": "Update an address"}
+
+
+def schemas_fields(tool_name: str) -> set:
+    from core import schemas
+    spec = schemas.load().get(tool_name) or {}
+    return set((spec.get("input_schema") or {}).get("properties", {}))
 
 
 def model_tool_schema(tool: dict) -> dict:
@@ -196,7 +207,8 @@ class GptConversation:
         task = None
         if self.task:
             task = {"skill": self.task["skill"].name, "texts": self.task["texts"],
-                    "picked": self.task["picked"]}
+                    "picked": self.task["picked"], "form": self.task.get("form"),
+                    "resume": self.task.get("resume")}
         return {"runtime": "gpt", "advisor_id": self.session.advisor_id,
                 "history": self.history[-80:], "task": task, "pending": self.pending,
                 "seen": sorted(self.seen), "skill": self.skill.name if self.skill else None}
@@ -212,6 +224,9 @@ class GptConversation:
         if t and skills.get(t["skill"]):
             self.task = {"skill": skills.get(t["skill"]), "texts": list(t.get("texts") or []),
                          "picked": dict(t.get("picked") or {})}
+            for k in ("form", "resume"):
+                if t.get(k):
+                    self.task[k] = t[k]
         else:
             self.task = None
 
@@ -289,6 +304,12 @@ class GptConversation:
         # 1. A confirmation panel is open. Trip 2 is a replay - no model call.
         if self.pending and self.pending["kind"] == "confirm":
             p = self.pending
+            if p.get("ack") and (low in YES or low == "confirm_ack"):
+                if low != "confirm_ack":                     # the box was not ticked
+                    msg = f"Please tick the box first: {p['ack']}"
+                    return ToolResponse(status="needs_input", message=msg,
+                                        card={**p["panel"], "notice": msg})
+                low = "confirm"
             if low in YES:
                 self.pending = None
                 self.history.append({"role": "user", "content": "Confirm"})
@@ -296,6 +317,9 @@ class GptConversation:
                 result = with_follow_up(p["tool"],
                                         self._dispatch(p["tool"], p["input"], confirmed=True))
                 self._note(f"the advisor clicked Confirm; result: {result.message}")
+                after = self._after_address(p, result) if p["tool"] == "update_address" else None
+                if after is not None:
+                    return self._say(after)
                 self.task = None
                 if result.card and result.card.get("follow_up_actions"):
                     self.pending = {"kind": "options", "panel": {
@@ -326,6 +350,12 @@ class GptConversation:
             self.pending = None
             self._note("the advisor did not click Confirm on that panel and wrote the next "
                        "message instead. Nothing has run.")
+
+        # 1b. An address field is open (autofill). Only a picked suggestion counts.
+        if self.pending and self.pending["kind"] == "address":
+            r = self._address_answer(text)
+            if r is not None:
+                return r
 
         # 2. Code asked a question with buttons - code matches the answer.
         if self.pending and self.pending["kind"] == "choice":
@@ -406,11 +436,12 @@ class GptConversation:
         if self.task is None:
             return self._say(ToolResponse(status="needs_input",
                                           message="What would you like to do?"))
-        if value == "__other__":                             # D-02: only addresses on file
-            return self._say(self._stop(
-                "A replacement can only go to an address in the client's profile. To use a "
-                "new address, add it to the client's profile in NetX360 first, then ask again.",
-                "address_not_in_profile"))
+        if value == "__other__" and field == "delivery_address":
+            return self._say(self._start_new_delivery())     # add it to the profile first
+        if field.startswith("address_suggestion"):           # a suggestion picked as a button
+            r = self._address_answer(value)
+            return r if r is not None else self._say(ToolResponse(
+                status="needs_input", message="Please pick an address from the suggestions."))
         if field == "flag_transactions":
             value = value == "yes"
         self.task["picked"][field] = value
@@ -426,12 +457,124 @@ class GptConversation:
             if stop:
                 return self._say(stop)
         self._note(f"the advisor chose {label} ({field.split(':')[0]} = {value}).")
+        return self._continue_form()
+
+    def _continue_form(self) -> ToolResponse:
+        """
+        After a code-built question, carry on. When the model already filled the form,
+        code re-checks it with the new answer - no model call. Otherwise the model
+        continues (e.g. after "which client?" it still has to look the card up).
+        """
+        form = self.task.get("form") if self.task else None
+        if form:
+            _, stop = self._action(self.task["skill"], form["tool"], dict(form["args"]))
+            if stop is not None:
+                return self._say(stop)
         return self._skill_turn()
 
+    # ------------------------------------------------------------ addresses (autofill)
+    def _address_input(self, question: str, title: str = "New address") -> ToolResponse:
+        panel = cards.address_input_card(title, question,
+                                         [{"label": "Cancel", "value": "cancel"}])
+        self.pending = {"kind": "address", "panel": panel}
+        return ToolResponse(status="needs_input", message=cards.to_text(panel), card=panel)
+
+    def _reshow(self, message: str) -> ToolResponse:
+        panel = (self.pending or {}).get("panel")
+        return ToolResponse(status="needs_input", message=message,
+                            card={**panel, "notice": message} if panel else None)
+
+    def _address_answer(self, text: str) -> ToolResponse | None:
+        """
+        The advisor's answer while an address field is open. A picked suggestion
+        arrives as "address_pick:<id>|<apt>"; the address itself is looked up again on
+        the server (never taken from the browser) and must be in the US or a territory.
+        Returns None when the message is something else (handled as a new request).
+        """
+        low = text.strip().lower()
+        if low in NO:
+            self.pending, self.task = None, None
+            self.history.append({"role": "user", "content": "Cancel"})
+            return self._say(ToolResponse(status="ok", message="Cancelled. Nothing was changed."))
+        if low.startswith("address_pick:"):
+            pid, _, unit = text.strip()[len("address_pick:"):].partition("|")
+            found = address_lookup.details(pid, self.pending.get("session", "") if self.pending
+                                           else "")
+            if not found:
+                return self._reshow("I couldn't load that address. Please pick it again.")
+            found = address_lookup.with_unit(found, unit)
+            if not address_lookup.is_us(found):
+                return self._reshow("Addresses must be in the United States or a US "
+                                    "territory. Please pick another one.")
+            self.pending = None
+            self.history.append({"role": "user", "content": found["address"]})
+            if self.task is None:
+                return self._say(ToolResponse(status="needs_input",
+                                              message="What would you like to do with that address?"))
+            self.task["picked"].update({"new_address": found["address"],
+                                        "new_state": found["state"],
+                                        "new_country": found["country"]})
+            self._note(f"the advisor picked the address {found['address']} from the search.")
+            return self._continue_form()
+        if re.search(r"\d", text) and len(text) <= 120:     # typed an address in the chat
+            hits = address_lookup.suggest(text).get("suggestions", [])
+            if hits:
+                return self._ask("address_suggestion", "Pick the address",
+                                 "Which of these is it? (or type in the address field)",
+                                 [{"label": h["text"], "value": f"address_pick:{h['id']}|"}
+                                  for h in hits[:4]])
+            return self._reshow("I couldn't find that address. Please type it in the "
+                                "address field and pick a suggestion.")
+        self.pending = None
+        return None
+
+    def _start_new_delivery(self) -> ToolResponse:
+        """Replacement flow -> "A different address": add it to the profile first (D-02)."""
+        form = self.task.get("form") or {}
+        client_id = (form.get("args") or {}).get("client_id")
+        stop = self._permission_stop(client_id, "update_address") if client_id else None
+        if stop:
+            return stop
+        self.task["resume"] = form                            # the replacement to finish after
+        self.task["form"] = {"tool": "update_address",
+                             "args": {"client_id": client_id, "mode": "add_delivery_address"}}
+        for f in ADDRESS_FIELDS + ("delivery_address", "mode", "address_label"):
+            self.task["picked"].pop(f, None)
+        self.task["picked"]["mode"] = "add_delivery_address"
+        return self._address_input("Type the new delivery address and pick it from the "
+                                   "suggestions. It will be added to the client's profile.")
+
+    def _after_address(self, pending: dict, result: ToolResponse) -> ToolResponse | None:
+        """After an address was saved: finish the replacement it was for, or offer one."""
+        if result.status != "ok":
+            return None
+        ti = pending["input"]
+        resume = pending.get("resume")
+        if ti.get("mode") == "add_delivery_address" and resume:
+            self._new_task(skills.for_tool(resume["tool"]))
+            self.task["texts"] = [pending.get("text", "")]
+            args = {**resume["args"], "delivery_address": ti["new_address"]}
+            self.task["picked"]["delivery_address"] = ti["new_address"]
+            _, panel = self._action(self.task["skill"], resume["tool"], args)
+            if panel is not None and panel.card is not None:
+                panel.card["note"] = result.message
+                return panel
+            return None
+        self.task = None
+        if ti.get("mode") == "add_delivery_address":
+            client = self.services.clients.get(ti["client_id"])
+            return self._offer(f"{result.message} Order a replacement card to this address now?",
+                               [{"label": "Yes, order a replacement",
+                                 "value": f"Order a replacement card for {client.name} to "
+                                          f"{ti['new_address']}"},
+                                {"label": "No, thanks", "value": "__no__"}])
+        return None
+
     # ------------------------------------------------------------ early stops (code)
-    def _permission_stop(self, client_id) -> ToolResponse | None:
+    def _permission_stop(self, client_id, tool: str | None = None) -> ToolResponse | None:
         try:
-            check_permission(self.services, self.session, client_id, self.task["skill"].tool)
+            check_permission(self.services, self.session, client_id,
+                             tool or self.task["skill"].tool)
         except AgentError as e:
             return self._stop(e.message, e.code)
         return None
@@ -676,19 +819,29 @@ class GptConversation:
     # ------------------------------------------------------------ the action form
     def _action(self, skill, name, args):
         seen = self.seen
-        if args.get("client_id") not in seen or args.get("card_id") not in seen:
+        needs_card = name != "update_address"
+        if args.get("client_id") not in seen or (needs_card and args.get("card_id") not in seen):
             return {"error": "Use the client_id and card_id returned by find_client and "
                              "list_cards; never invent an id."}, None
         args = dict(args)
         picked = self.task["picked"]
-        for f in ("reason", "incident_type", "delivery_address", "flag_transactions"):
-            if f in picked:
+        if name == "update_address":
+            for f in ADDRESS_FIELDS:                         # never from the model
+                args.pop(f, None)
+        for f in ("reason", "incident_type", "delivery_address", "flag_transactions",
+                  "mode", "address_label") + ADDRESS_FIELDS:
+            if f in picked and f in schemas_fields(name):
                 args[f] = picked[f]                          # the advisor's button wins
+        self.task["form"] = {"tool": name, "args": {k: v for k, v in args.items()
+                                                     if k not in ADDRESS_FIELDS}}
 
-        card = self.services.cards.get_card(args["card_id"])
-        if card is None or card.client_id != args["client_id"]:
-            return {"error": "That card does not belong to this client."}, None
-        stop = self._permission_stop(args["client_id"]) or self._state_stop(card)
+        card = None
+        if needs_card:
+            card = self.services.cards.get_card(args["card_id"])
+            if card is None or card.client_id != args["client_id"]:
+                return {"error": "That card does not belong to this client."}, None
+        stop = self._permission_stop(args["client_id"], name) or \
+            (self._state_stop(card) if card else None)
         if stop:
             return None, stop
 
@@ -707,21 +860,56 @@ class GptConversation:
         if r.status == "awaiting_confirmation":
             self.pending = {"kind": "confirm", "tool": name, "input": r.data["input"],
                             "text": " / ".join(self.task["texts"]) or self.session.utterance}
+            if r.card.get("ack"):
+                self.pending.update({"ack": r.card["ack"], "panel": r.card})
+            if name == "update_address" and self.task.get("resume"):
+                self.pending["resume"] = self.task["resume"]
             fields = ", ".join(f"{f['label']}: {f['value']}" for f in r.card["fields"])
             self._note(f"a confirmation panel is showing: {r.card['title']} ({fields}). "
                        "Nothing has run yet.")
             return None, r
         code = r.data.get("code")
-        if code and code.startswith("address_"):              # D-02: show what IS allowed
-            return None, self._address_panel(card, refusal=r.message)
+        if code and code.startswith("address_") and name == "replace_card":
+            return None, self._address_panel(card, refusal=r.message)   # show what IS allowed
         if code in ("not_entitled", "volume_limit", "card_pending", "already_locked",
-                    "not_locked", "card_closed"):
+                    "not_locked", "card_closed", "address_not_us", "address_exists"):
             return None, self._stop(r.message, code)
         self._note(f"{name} was refused: {r.message}")
         return {"error": r.message, "code": code}, None
 
     def _ask_missing(self, name, args, card) -> ToolResponse | None:
         """F-20: the system, not the model, asks for these - always as the same buttons."""
+        if name == "update_address":
+            client = self.services.clients.get(args["client_id"])
+            profile = self.services.clients.addresses(args["client_id"])
+            if args.get("mode") not in ("change_profile_address", "add_delivery_address"):
+                return self._ask("mode", "Update address", "What would you like to do?",
+                                 [{"label": f"Change an address in {client.name}'s profile",
+                                   "value": "change_profile_address"},
+                                  {"label": "Add a new delivery address for a replacement card",
+                                   "value": "add_delivery_address"}])
+            if args["mode"] == "change_profile_address":
+                if not profile:
+                    self.task["picked"]["mode"] = "add_delivery_address"
+                    args["mode"] = "add_delivery_address"
+                elif len(profile) > 1 and args.get("address_label") not in [a.label for a in profile]:
+                    return self._ask("address_label", "Which address?",
+                                     f"{client.name} has {len(profile)} addresses in the profile. "
+                                     "Which one should change?",
+                                     [{"label": f"{a.label}: {a.address}", "value": a.label}
+                                      for a in profile][:6])
+                elif len(profile) == 1:
+                    args["address_label"] = profile[0].label
+            if "new_address" not in args:
+                if args["mode"] == "change_profile_address":
+                    old = next(a.address for a in profile if a.label == args["address_label"])
+                    q = (f"Type the new address for {args['address_label']} ({old}) and pick "
+                         "it from the suggestions.")
+                else:
+                    q = ("Type the new delivery address and pick it from the suggestions. It "
+                         "will be added to the client's profile.")
+                return self._address_input(q)
+            return None
         if name == "replace_card":
             if args.get("reason") not in REASON_LABELS:
                 return self._ask("reason", "Reason", "What is the reason for the replacement?",

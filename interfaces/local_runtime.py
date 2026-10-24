@@ -254,6 +254,10 @@ class Conversation:
                 status="needs_input",
                 message=f"I handle debit card requests: {names}. What would you like to do?")
         self.skill = skills.for_tool(tool)      # what a real model would be given
+        if tool == "update_address":
+            return ToolResponse(status="needs_input",
+                                message="Address updates use the address search, which needs "
+                                        "the GPT-5.4 runtime. Please set OPENAI_API_KEY.")
 
         client = self._resolve_client(text)
         if isinstance(client, ToolResponse):

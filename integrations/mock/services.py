@@ -18,10 +18,30 @@ from core.models import Address, Card, Client
 from integrations.mock import dataset as data
 
 
+class MemoryAddressBook:
+    """Each client's profile addresses, in this process (changes reset on restart)."""
+    def __init__(self):
+        self._rows = copy.deepcopy(data.ADDRESSES)
+
+    def list(self, client_id: str) -> list[dict]:
+        return [dict(a) for a in self._rows.get(client_id, [])]
+
+    def add(self, client_id: str, row: dict) -> None:
+        self._rows.setdefault(client_id, []).append(dict(row))
+
+    def update(self, client_id: str, label: str, row: dict) -> bool:
+        for a in self._rows.get(client_id, []):
+            if a["label"] == label:
+                a.update(row)
+                return True
+        return False
+
+
 class MockClientDirectory:
-    def __init__(self, entitlements):
+    def __init__(self, entitlements, address_book=None):
         self._entitlements = entitlements
         self._clients = [Client(**c) for c in data.CLIENTS]
+        self._book = address_book or MemoryAddressBook()
 
     def find(self, query: str, advisor_id: str) -> list[Client]:
         """Every word of the query must appear in the name, so "Sarah Chen"
@@ -60,7 +80,16 @@ class MockClientDirectory:
         return out
 
     def addresses(self, client_id: str) -> list[Address]:
-        return [Address(**a) for a in data.ADDRESSES.get(client_id, [])]
+        return [Address(**a) for a in self._book.list(client_id)]
+
+    def add_address(self, client_id: str, address: Address) -> None:
+        self._book.add(client_id, address.__dict__)
+
+    def change_address(self, client_id: str, label: str, address: Address) -> bool:
+        """Replace the address under `label` (the label stays)."""
+        return self._book.update(client_id, label, {"address": address.address,
+                                                    "state": address.state,
+                                                    "country": address.country})
 
 
 class MockEntitlementService:
