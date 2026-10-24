@@ -73,7 +73,7 @@ def run():
     m = ScriptedModel(route("update-address"), call("find_client", query="Hiroshi Tanaka"),
                       call("update_address", client_id="C-13402", mode="change_profile_address"))
     svc, conv = fresh(m, "ADV-5678")
-    r = conv.send("Change Hiroshi Tanaka's address")
+    r = conv.send("Change the address in Hiroshi Tanaka's profile")
     check("T-28b", "one address: no 'which one' question, straight to the search",
           r.card["kind"] == "address_input" and "18 Kearny St" in r.card["message"])
 

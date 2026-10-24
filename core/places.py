@@ -145,3 +145,105 @@ def is_po_box(address: str) -> bool:
 
 def normalise_address(address: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (address or "").lower()).strip()
+
+
+# ---------------------------------------------------------------- from the advisor's words
+
+# Well-known cities -> the destinations on BNY's list they most likely mean.
+# Used only to suggest buttons; the advisor always picks (never assumed).
+CITIES = {
+    "paris": ["France", "Texas"], "london": ["United Kingdom", "Kentucky"],
+    "rome": ["Italy", "Georgia (US state)"], "milan": ["Italy"], "florence": ["Italy", "South Carolina"],
+    "venice": ["Italy", "Florida"], "madrid": ["Spain"], "barcelona": ["Spain"],
+    "lisbon": ["Portugal"], "berlin": ["Germany"], "munich": ["Germany"],
+    "amsterdam": ["Netherlands"], "brussels": ["Belgium"], "vienna": ["Austria", "Virginia"],
+    "zurich": ["Switzerland"], "geneva": ["Switzerland"], "dublin": ["Ireland", "Ohio"],
+    "athens": ["Greece", "Georgia (US state)"], "istanbul": ["Turkey"], "prague": ["Czechia"],
+    "tokyo": ["Japan"], "kyoto": ["Japan"], "osaka": ["Japan"], "seoul": ["South Korea"],
+    "beijing": ["China"], "shanghai": ["China"], "hong kong": ["Hong Kong"],
+    "singapore": ["Singapore"], "bangkok": ["Thailand"], "dubai": ["United Arab Emirates"],
+    "tel aviv": ["Israel"], "jerusalem": ["Israel"], "cairo": ["Egypt"],
+    "sydney": ["Australia"], "melbourne": ["Australia", "Florida"], "auckland": ["New Zealand"],
+    "toronto": ["Canada"], "montreal": ["Canada"], "vancouver": ["Canada", "Washington"],
+    "mexico city": ["Mexico"], "cancun": ["Mexico"], "rio": ["Brazil"],
+    "buenos aires": ["Argentina"], "lima": ["Peru", "Ohio"],
+    "new york": ["New York"], "nyc": ["New York"], "los angeles": ["California"],
+    "san francisco": ["California"], "chicago": ["Illinois"], "miami": ["Florida"],
+    "boston": ["Massachusetts"], "las vegas": ["Nevada"], "honolulu": ["Hawaii"],
+    "orlando": ["Florida"], "seattle": ["Washington"], "austin": ["Texas"],
+    "san juan": ["Puerto Rico"], "springfield": ["Illinois", "Massachusetts", "Missouri"],
+    "portland": ["Oregon", "Maine"], "birmingham": ["United Kingdom", "Alabama"],
+}
+
+_STOP_AFTER = r"(?:\s+(?:next|this|on|from|for|in\s+\w+|between|starting|until|tomorrow|today|\d)|[,.;!?]|$)"
+
+
+REGIONS = {"europe", "asia", "africa", "south america", "central america", "latin america",
+           "caribbean", "the caribbean", "middle east", "scandinavia", "the balkans", "oceania"}
+_MONTH_WORDS = {"jan", "january", "feb", "february", "mar", "march", "apr", "april", "may",
+                "jun", "june", "jul", "july", "aug", "august", "sep", "sept", "september",
+                "oct", "october", "nov", "november", "dec", "december", "next", "this"}
+
+
+def mentioned_destinations(texts: list[str], exclude: list[str] | None = None) -> list[str]:
+    """
+    Raw place names the advisor wrote, in the order written: list names, aliases,
+    known cities and regions found in the text, plus capitalised words after
+    "to / in / visiting" (e.g. "going to Paris"). `exclude`: client names etc.
+    Returns them as written; resolve_destination / CITIES decide what they mean.
+    """
+    text = " ".join(texts or [])
+    for x in exclude or []:
+        text = re.sub(re.escape(x), " ", text, flags=re.I)
+    low = re.sub(r"[^\w\s'().-]", " ", text.lower())
+    hits: list[tuple[int, str]] = []
+
+    names = sorted(set([d.lower() for d in all_destinations()] + list(ALIASES) + list(BOTH)
+                       + list(CITIES) + list(REGIONS)
+                       + [v.lower() for v in US_STATES.values()]
+                       + [v.lower() for v in US_TERRITORIES.values()]),
+                   key=len, reverse=True)
+    taken = low
+    for n in names:
+        base = n.replace(" (country)", "").replace(" (us state)", "")
+        pat = r"(?<![\w])" + re.escape(n if "(" in n else base) + r"(?![\w])"
+        for m in re.finditer(pat, taken):
+            if base in ("may", "georgia") and base == "may":
+                continue
+            hits.append((m.start(), text[m.start():m.end()]))
+            taken = taken[:m.start()] + " " * (m.end() - m.start()) + taken[m.end():]
+    for m in re.finditer(r"\b(?:to|in|visiting|visit)\s+([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*){0,2})",
+                         text):
+        words = [w for w in m.group(1).split() if w.lower().strip(".") not in _MONTH_WORDS]
+        cand = " ".join(words).strip(" .")
+        if not cand or cand.lower() in ("the", "a", "an", "her", "his", "their"):
+            continue
+        start = m.start(1)
+        if any(abs(start - p) < 2 or cand.lower() in h.lower() or h.lower() in cand.lower()
+               for p, h in hits):
+            continue
+        hits.append((start, cand))
+    hits.sort()
+    out: list[str] = []
+    for _, h in hits:
+        if h.lower() not in [o.lower() for o in out]:
+            out.append(h)
+    return out
+
+
+def suggest_destinations(text: str, limit: int = 8) -> list[str]:
+    """Destination names on BNY's list matching what the advisor is typing."""
+    t = (text or "").strip().lower()
+    if not t:
+        return []
+    every = all_destinations()
+    starts = [d for d in every if d.lower().startswith(t)]
+    inner = [d for d in every if t in d.lower() and d not in starts]
+    out = starts + inner
+    for alias, target in ALIASES.items():
+        if alias.startswith(t) and target not in out:
+            out.append(target)
+    for city, targets in CITIES.items():
+        if city.startswith(t):
+            out += [x for x in targets if x not in out]
+    return out[:limit]

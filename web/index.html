@@ -43,7 +43,8 @@
   header {
     display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px;
   }
-  header .title { font-weight: 700; color: var(--head); font-size: 15px; }
+  header .title { font-weight: 700; color: var(--head); font-size: 15px; white-space: nowrap; }
+  .info { font-size: 12.5px; color: var(--head); background: var(--blue-tint); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px; }
   header .spark { width: 18px; height: 18px; color: #3A73C9; }
   header .grow { flex: 1; }
   header .icon { width: 18px; height: 18px; color: var(--text); opacity: .85; }
@@ -120,6 +121,20 @@
   .addr .sug:hover { border-color: var(--blue); background: var(--blue-tint); }
   .addr .pw { font-size: 10.5px; color: var(--hint); margin-bottom: 8px; }
   @media (max-width: 600px) { .addr input { font-size: 16px; } }
+  .actbtn { font-weight: 600; color: var(--blue); border-color: var(--blue); }
+  .cancelrow { margin-top: 8px; }
+  button.b.cancel { color: var(--hint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--blue-tint);
+    border: 1px solid var(--blue); color: var(--head); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 13px; }
+  .chip button { border: 0; background: transparent; color: var(--hint); cursor: pointer; font-size: 14px; padding: 0 4px; }
+  .field { margin-bottom: 8px; }
+  .field .lbl { font-size: 12px; color: var(--hint); margin-bottom: 3px; }
+  .field input, .field textarea { width: 100%; font: inherit; font-size: 14px; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--white); }
+  .field textarea { min-height: 54px; resize: vertical; }
+  .field .err { font-size: 12px; margin-top: 3px; }
+  @media (max-width: 600px) { .field input, .field textarea, .dates input { font-size: 16px; } }
   .done { display: flex; gap: 8px; align-items: flex-start; color: var(--green); font-weight: 600; }
   .done svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
   .err { color: var(--red); }
@@ -169,6 +184,7 @@
     <svg class="spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/><path d="M5 2l.6 1.4L7 4l-1.4.6L5 6l-.6-1.4L3 4l1.4-.6z"/></svg>
     <span class="title">NetX AI</span>
     <span class="grow"></span>
+    <button id="actions" class="advisor actbtn" title="Pick a card action">Actions</button>
     <select id="advisor" class="advisor" title="Signed-in advisor (mock)"></select>
     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -199,7 +215,7 @@ const ICONS = {
        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
 };
-const WELCOME = "Hi, I can help with your clients' debit cards: lock, unlock, replace, close permanently, report lost or stolen, and travel notices.";
+const WELCOME = "Hi, I can help with your clients' debit cards: lock, unlock, replace, close permanently, report lost or stolen, travel notices, and the addresses cards are sent to. Type a request, or tap Actions.";
 
 const $ = (id) => document.getElementById(id);
 const msgs = $("msgs"), input = $("input"), sendBtn = $("send"), advisorSel = $("advisor");
@@ -228,8 +244,9 @@ function renderChoice(card) {
   topLines(c, card);
   if (card.title) c.appendChild(el("h4", null, esc(card.title)));
   if (card.message) c.appendChild(el("div", "q", esc(card.message)));
-  const acts = card.actions || [];
-  const longest = Math.max(...acts.map(a => a.label.length));
+  const all = card.actions || [];
+  const acts = all.filter(a => a.style !== "cancel");
+  const longest = Math.max(0, ...acts.map(a => a.label.length));
   const opts = el("div", "opts" + (acts.length > 2 || longest > 22 ? " stack" : ""));
   acts.forEach(a => {
     const btn = el("button", "b opt", esc(a.label));
@@ -237,6 +254,142 @@ function renderChoice(card) {
     opts.appendChild(btn);
   });
   c.appendChild(opts);
+  cancelRow(c, all);
+  return c;
+}
+
+// P-12: every card has a Cancel button (its own row, under the options).
+function cancelRow(c, actions, extra) {
+  const row = el("div", "btns cancelrow");
+  (extra || []).forEach(b => row.appendChild(b));
+  (actions || []).filter(a => a.style === "cancel").forEach(a => {
+    const btn = el("button", "b cancel", esc(a.label));
+    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    row.appendChild(btn);
+  });
+  if (row.children.length) c.appendChild(row);
+}
+
+function cardHead(c, card) {
+  topLines(c, card);
+  if (card.title) c.appendChild(el("h4", null, esc(card.title)));
+  if (card.message) c.appendChild(el("div", "q", esc(card.message)));
+}
+
+// A text field with suggestions fetched while typing. pick(s) is called with one suggestion.
+function suggestField(input, box, url, show, pick) {
+  let timer = null, seq = 0;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const text = input.value.trim();
+    if (text.length < 1) { box.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try {
+        const res = await fetch(url(text), { headers: demoHeaders() });
+        const out = await res.json();
+        if (mine !== seq) return;
+        box.innerHTML = "";
+        (out.suggestions || []).forEach(sg => {
+          const b = el("button", "sug", show(sg));
+          b.onclick = () => { if (!busy) pick(sg); };
+          box.appendChild(b);
+        });
+        if (!(out.suggestions || []).length) box.appendChild(el("div", "hint", "No match yet - keep typing."));
+      } catch (e) { box.innerHTML = ""; }
+    }, 200);
+  });
+}
+
+// P-16/P-17: "Which client?" - only this advisor's clients are suggested.
+function renderClientInput(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const q = el("input"); q.type = "text"; q.placeholder = "Start typing the client's name…"; q.autocomplete = "off";
+  const sugs = el("div", "sugs");
+  c.appendChild(q); c.appendChild(sugs);
+  suggestField(q, sugs, t => `/api/clients/suggest?advisor=${encodeURIComponent(advisorSel.value)}&q=${encodeURIComponent(t)}`,
+    sg => esc(sg.label), sg => { lockCard(c); q.disabled = true; send(`client_pick:${sg.id}`, sg.label.split(" · ")[0]); });
+  q.addEventListener("keydown", e => {
+    if (e.key === "Enter" && q.value.trim() && !busy) { e.preventDefault(); lockCard(c); q.disabled = true; send(q.value.trim()); }
+  });
+  cancelRow(c, card.actions);
+  setTimeout(() => q.focus(), 50);
+  return c;
+}
+
+// Two date fields: From / To, no past dates, at most maxDays (both days counted).
+function dateFields(parent, start, end, maxDays) {
+  const today = isoLocal(new Date());
+  const box = el("div", "dates",
+    `<div class="row2"><label>From<input type="date" class="ds"></label><label>To<input type="date" class="de"></label></div>
+     <div class="dh">Up to ${maxDays} days, no past dates.</div>`);
+  const s = box.querySelector(".ds"), e = box.querySelector(".de"), h = box.querySelector(".dh");
+  s.min = today; e.min = today;
+  if (start) s.value = start; if (end) e.value = end;
+  function check() {
+    h.className = "dh"; h.textContent = `Up to ${maxDays} days, no past dates.`;
+    if (s.value) { e.min = s.value; e.max = addDays(s.value, maxDays - 1); }
+    if (!s.value || !e.value) return false;
+    if (s.value < today) { h.className = "dh err"; h.textContent = "The start date is in the past."; return false; }
+    if (e.value < s.value) { h.className = "dh err"; h.textContent = "The end date is before the start date."; return false; }
+    if (e.value > addDays(s.value, maxDays - 1)) { h.className = "dh err"; h.textContent = `A travel notice can cover at most ${maxDays} days.`; return false; }
+    return true;
+  }
+  parent.appendChild(box);
+  return { s, e, check, box };
+}
+
+// P-02/03/04/09: destinations (from BNY's list, with suggestions) and dates on one card.
+function renderTravelForm(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const max = card.max_destinations || 10;
+  let dests = [...(card.destinations || [])];
+  const fld = el("div", "field"); fld.appendChild(el("div", "lbl", `Destinations (countries or US states, up to ${max})`));
+  const chips = el("div", "chips"), q = el("input"), sugs = el("div", "sugs");
+  q.type = "text"; q.placeholder = "Type a country or US state…"; q.autocomplete = "off";
+  fld.appendChild(chips); fld.appendChild(q); fld.appendChild(sugs); c.appendChild(fld);
+  function drawChips() {
+    chips.innerHTML = "";
+    dests.forEach((d, i) => {
+      const ch = el("span", "chip", esc(d)); const x = el("button", null, "×"); x.title = "Remove";
+      x.onclick = () => { dests.splice(i, 1); drawChips(); valid(); };
+      ch.appendChild(x); chips.appendChild(ch);
+    });
+    q.disabled = dests.length >= max;
+    q.placeholder = dests.length >= max ? `Up to ${max} destinations` : "Type a country or US state…";
+  }
+  suggestField(q, sugs, t => `/api/places/suggest?q=${encodeURIComponent(t)}`, sg => esc(sg),
+    sg => { if (!dests.includes(sg) && dests.length < max) dests.push(sg); q.value = ""; sugs.innerHTML = ""; drawChips(); valid(); q.focus(); });
+  const df = dateFields(c, card.start, card.end, card.max_days || 14);
+  const go = el("button", "b primary", "Continue");
+  function valid() { const ok = dests.length > 0 && df.check(); go.disabled = !ok; return ok; }
+  df.s.addEventListener("change", valid); df.e.addEventListener("change", valid);
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    lockCard(c, go); c.querySelectorAll("input").forEach(i => i.disabled = true);
+    send("travel_form:" + JSON.stringify({ destinations: dests, start: df.s.value, end: df.e.value }),
+         `${dests.join(", ")}, ${niceDate(df.s.value)} to ${niceDate(df.e.value)}`);
+  };
+  drawChips(); valid();
+  cancelRow(c, card.actions, [go]);
+  return c;
+}
+
+// P-11: one required text box (e.g. what "Other" means).
+function renderTextInput(card) {
+  const c = el("div", "card");
+  cardHead(c, card);
+  const fld = el("div", "field"), t = el("textarea");
+  t.placeholder = card.placeholder || ""; t.maxLength = 200;
+  fld.appendChild(t); c.appendChild(fld);
+  const go = el("button", "b primary", esc(card.submit || "Continue"));
+  const ok = () => t.value.trim().length >= 3;
+  go.disabled = true; t.oninput = () => { go.disabled = !ok(); };
+  go.onclick = () => { if (busy || !ok()) return; lockCard(c, go); t.disabled = true; send("text_input:" + t.value.trim(), t.value.trim()); };
+  cancelRow(c, card.actions, [go]);
+  setTimeout(() => t.focus(), 50);
   return c;
 }
 
@@ -280,6 +433,7 @@ function datePicker(cardEl, d) {
 function topLines(c, card) {
   if (card.note) c.appendChild(el("div", "okline", ICONS.check + `<span>${esc(card.note)}</span>`));
   if (card.notice) c.appendChild(el("div", "notice", esc(card.notice)));
+  if (card.info) c.appendChild(el("div", "info", esc(card.info)));
 }
 
 // Address field with suggestions while typing (US + territories). The server
@@ -336,11 +490,22 @@ function renderConfirm(card) {
   const c = el("div", "card" + (card.danger ? " danger" : ""));
   topLines(c, card);
   c.appendChild(el("h4", null, esc(card.title)));
+  const inlineDates = card.dates && card.dates.inline;
   const f = el("div", "fields");
-  (card.fields || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+  (card.fields || []).filter(x => !(inlineDates && x.label === "Dates"))
+    .forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
   c.appendChild(f);
+  let df = null, reason = null, reasonErr = null, tick = null;
+  if (inlineDates) df = dateFields(c, card.dates.start, card.dates.end, card.dates.max_days || 14);   // P-14
+  if (card.text_input) {                            // P-06: required, editable text box
+    const ti = card.text_input, fld = el("div", "field");
+    fld.appendChild(el("div", "lbl", esc(ti.label) + (ti.required ? " (required)" : "")));
+    reason = el("input"); reason.type = "text"; reason.maxLength = 200;
+    reason.placeholder = ti.placeholder || ""; reason.value = ti.value || "";
+    reasonErr = el("div", "err");
+    fld.appendChild(reason); fld.appendChild(reasonErr); c.appendChild(fld);
+  }
   if (card.warning) c.appendChild(el("div", "warn", esc(card.warning)));
-  let tick = null;
   if (card.ack) {                                   // a box the advisor must tick first
     const lab = el("label", "ack");
     tick = el("input"); tick.type = "checkbox";
@@ -352,10 +517,21 @@ function renderConfirm(card) {
     const cls = a.style === "primary" ? "primary" : a.style === "alternative" ? "alt" : "";
     const btn = el("button", "b " + cls, esc(a.label));
     if (a.value === "change_dates" && card.dates) btn.onclick = () => { if (!busy) datePicker(c, card.dates); };
-    else if (a.value === "confirm" && tick) {
-      btn.disabled = true;
-      tick.onchange = () => { btn.disabled = !tick.checked; };
-      btn.onclick = () => { if (busy || !tick.checked) return; lockCard(c, btn); send("confirm_ack", a.label); };
+    else if (a.value === "confirm" && (tick || reason || df)) {
+      const ready = () => (!tick || tick.checked) && (!reason || reason.value.trim().length >= 3)
+                          && (!df || df.check());
+      btn.disabled = !ready();
+      [tick, reason, df && df.s, df && df.e].forEach(x => x && x.addEventListener(x === reason ? "input" : "change",
+                                                                                 () => { btn.disabled = !ready(); }));
+      btn.onclick = () => {
+        if (busy || !ready()) return;
+        const extra = {};
+        if (tick) extra.ack = true;
+        if (reason) extra.reason = reason.value.trim();
+        if (df) { extra.start = df.s.value; extra.end = df.e.value; }
+        lockCard(c, btn); c.querySelectorAll("input").forEach(i => i.disabled = true);
+        send("confirm_with:" + JSON.stringify(extra), a.label);
+      };
     }
     else btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
     btns.appendChild(btn);
@@ -375,6 +551,9 @@ function renderReply(r) {
   }
   if (card && card.kind === "confirm") { addBot(renderConfirm(card), false); return; }
   if (card && card.kind === "address_input") { addBot(renderAddress(card), false); return; }
+  if (card && card.kind === "client_input") { addBot(renderClientInput(card), false); return; }
+  if (card && card.kind === "travel_form") { addBot(renderTravelForm(card), false); return; }
+  if (card && card.kind === "text_input") { addBot(renderTextInput(card), false); return; }
   if (card && card.kind === "result") {
     const main = (r.message || "").split("\n")[0];
     addBot(el("div", "done", ICONS.check + `<span>${esc(main)}</span>`), !card.follow_up);
@@ -394,7 +573,7 @@ function typing(on) {
 
 // F-09: once the advisor moves on, earlier panels can no longer be clicked.
 function retireOldPanels() {
-  msgs.querySelectorAll(".card button:not(:disabled), .card input:not(:disabled)").forEach(b => b.disabled = true);
+  msgs.querySelectorAll(".card button:not(:disabled), .card input:not(:disabled), .card textarea:not(:disabled)").forEach(b => b.disabled = true);
 }
 
 async function send(utterance, display) {
@@ -429,6 +608,7 @@ sendBtn.onclick = submit;
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
 input.addEventListener("input", autosize);
 advisorSel.onchange = newConversation;
+$("actions").onclick = () => { if (!busy) send("__actions__", "Actions"); };
 
 function start() { newConversation(); input.focus(); }
 

@@ -106,11 +106,10 @@ def run():
     check("asks 'Which card?' with a code panel",
           r.status == "needs_input" and r.card and r.card.get("title") == "Which card?")
     check("both cards offered", "2201" in r.message and "2202" in r.message)
-    m.add(call("lock_card", client_id="C-10220", card_id="CARD-2202"))
     calls_before = len(m.requests)
     r = conv.send("2202")
-    check("typed '2202' resolves the card without a routing call",
-          len(m.requests) == calls_before + 1)
+    check("typed '2202' resolves the card with no model call (code goes on)",
+          len(m.requests) == calls_before)
     check("confirmation panel, nothing run yet",
           r.status == "awaiting_confirmation" and svc.cards.get_card("CARD-2202").status == "active")
 
@@ -139,7 +138,8 @@ def run():
     r = conv.send("Lock Jane Miller's card")
     tool_reply = m.requests[-1]["messages"][-1]["content"]
     check("an id no lookup returned is refused", "never invent" in tool_reply)
-    check("no confirmation panel", conv.pending is None)
+    check("code then finds the client from the advisor's own words",
+          r.status == "awaiting_confirmation" and r.data["input"]["client_id"] == "C-88210")
     m = ScriptedModel(route("lock-card"),
                       call("close_card", client_id="C-88210", card_id="CARD-4417", reason="x"),
                       say("I can only lock cards here."))
@@ -149,28 +149,27 @@ def run():
           "not available" in m.requests[-1]["messages"][-1]["content"])
     check("the model only sees its own action tool",
           {t["function"]["name"] for t in m.requests[1]["tools"]}
-          == {"lock_card", "find_client", "list_cards", "present_options", "switch_action"})
+          == {"lock_card", "find_client", "list_cards", "switch_action"})
 
-    print("\n6. Model-offered options, then a switch of skill")
+    print("\n6. 'Cancel her card': code asks lock or close, then switches by itself")
     m = ScriptedModel(route("close-card"),
                       call("find_client", query="Jane Miller"),
                       call("list_cards", client_id="C-88210"),
-                      call("present_options", question="Lock it for now, or close it permanently?",
-                           options=["Lock (reversible)", "Close permanently"]))
+                      call("close_card", client_id="C-88210", card_id="CARD-4417"))
     svc, conv = fresh(m)
     r = conv.send("Cancel Jane Miller's card")
-    check("options shown as buttons", r.card and r.card["kind"] == "choice"
-          and len(r.card["actions"]) == 2)
-    m.add(route("lock-card"), call("lock_card", client_id="C-88210", card_id="CARD-4417"))
+    check("lock or close asked with buttons, plus Cancel", r.card and r.card["kind"] == "choice"
+          and [a["value"] for a in r.card["actions"]] == ["lock-card", "close", "__cancel__"])
+    calls_before = len(m.requests)
     r = conv.send("1")
-    check("typed '1' becomes the label for the model",
-          m.requests[-2]["messages"][-1]["content"] == "Lock (reversible)")
-    check("lock-card can use the ids found under close-card", r.status == "awaiting_confirmation")
+    check("typed '1' = lock: the lock panel, no model call",
+          r.status == "awaiting_confirmation" and r.data["tool"] == "lock_card"
+          and len(m.requests) == calls_before)
     r = conv.send("cancel")
     check("Cancel: nothing changed", r.message.startswith("Cancelled")
           and svc.cards.get_card("CARD-4417").status == "active")
 
-    print("\n7. Travel notice: Change dates is code, new dates go back to the model")
+    print("\n7. Travel notice: vague dates open the travel card; dates edited on the panel")
     m = ScriptedModel(route("travel-notice"),
                       call("find_client", query="Jane Miller"),
                       call("list_cards", client_id="C-88210"),
@@ -179,21 +178,20 @@ def run():
                            end_date=str(end)))
     svc, conv = fresh(m)
     r = conv.send("Jane Miller is off to Georgia, the country, next month for two weeks")
-    labels = [a["label"] for a in r.card["actions"]]
-    check("panel offers Confirm, Change dates, Cancel", labels == ["Confirm", "Change dates", "Cancel"])
+    check("travel card, Georgia (country) filled in, no dates assumed",
+          r.card["kind"] == "travel_form" and r.card["destinations"] == ["Georgia (country)"]
+          and r.card["start"] == "")
     calls_before = len(m.requests)
-    r = conv.send("change_dates")
-    check("Change dates asks, with no model call",
-          r.message.startswith("What dates") and len(m.requests) == calls_before)
-    m.add(route("travel-notice"),
-          call("travel_notice", client_id="C-88210", card_id="CARD-4417",
-               destination=["Georgia (country)"], start_date=str(start + timedelta(days=2)),
-               end_date=str(end + timedelta(days=2))))
-    r = conv.send("make it two days later")
-    check("a new panel with the new dates", r.status == "awaiting_confirmation"
-          and r.data["input"]["start_date"] == str(start + timedelta(days=2)))
-    r = conv.send("confirm")
-    check("travel notice added", r.status == "ok" and len(svc.cards.travel_notices) == 1)
+    r = conv.send("travel_form:" + json.dumps({"destinations": ["Georgia (country)"],
+                                               "start": str(start), "end": str(end)}))
+    labels = [a["label"] for a in r.card["actions"]]
+    check("panel: Confirm, Cancel; dates editable on the panel",
+          labels == ["Confirm", "Cancel"] and r.card["dates"]["inline"])
+    r = conv.send("confirm_with:" + json.dumps({"start": str(start + timedelta(days=2)),
+                                                "end": str(end + timedelta(days=2))}))
+    check("travel notice added with the edited dates, no model call",
+          r.status == "ok" and svc.cards.travel_notices[-1]["start_date"]
+          == str(start + timedelta(days=2)) and len(m.requests) == calls_before)
 
     print("\n8. Card state is checked by code as soon as the card is known (F-17)")
     m = ScriptedModel(route("lock-card"),
@@ -215,13 +213,14 @@ def run():
                       call("list_cards", client_id="C-88210"),
                       call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
     _, conv = fresh(m)
-    r = conv.send("Jane Miller lost her wallet")
+    r = conv.send("Jane Miller's card is missing")
     check("lost or stolen asked with buttons",
-          r.card["kind"] == "choice" and [a["value"] for a in r.card["actions"]] == ["lost", "stolen"])
+          r.card["kind"] == "choice"
+          and [a["value"] for a in r.card["actions"]] == ["lost", "stolen", "__cancel__"])
     m.add(call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
     r = conv.send("lost")
     check("then unrecognised transactions, Yes / No",
-          [a["label"] for a in r.card["actions"]] == ["Yes", "No"])
+          [a["label"] for a in r.card["actions"]] == ["Yes", "No", "Cancel"])
     m.add(call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
     r = conv.send("No")
     check("panel with the chosen values", r.status == "awaiting_confirmation"

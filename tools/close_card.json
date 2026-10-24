@@ -15,13 +15,12 @@
       },
       "reason": {
         "type": "string",
-        "description": "Why it is being closed. Stored on the audit record."
+        "description": "Never fill this. The advisor types the reason on the confirmation card."
       }
     },
     "required": [
       "client_id",
-      "card_id",
-      "reason"
+      "card_id"
     ]
   }
 }

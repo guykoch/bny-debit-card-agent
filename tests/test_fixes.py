@@ -10,6 +10,8 @@ GPT-5.4 phrases things well is checked live in the demo (Tests sheet).
 
 from __future__ import annotations
 
+import json
+
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 os.environ["DCA_STORE"] = "memory"
@@ -42,11 +44,16 @@ def fresh(model, advisor="ADV-1234"):
 
 
 def values(r):
-    return [a["value"] for a in (r.card or {}).get("actions", [])]
+    """The card's options, without the Cancel every card has (P-12, checked separately)."""
+    return [a["value"] for a in (r.card or {}).get("actions", []) if a.get("style") != "cancel"]
 
 
 def labels(r):
-    return [a["label"] for a in (r.card or {}).get("actions", [])]
+    return [a["label"] for a in (r.card or {}).get("actions", []) if a.get("style") != "cancel"]
+
+
+def has_cancel(r):
+    return any(a["value"] in ("__cancel__", "cancel") for a in (r.card or {}).get("actions", []))
 
 
 def run():
@@ -166,13 +173,12 @@ def run():
                       call("list_cards", client_id="C-88210"),
                       call("travel_notice", client_id="C-88210", card_id="CARD-4417",
                            destination=["Paris"], start_date=str(start),
-                           end_date=str(start + timedelta(days=6))),
-                      say("Paris is a city - which country or US state is it in?"))
+                           end_date=str(start + timedelta(days=6))))
     _, conv = fresh(m)
     r = conv.send("Jane Miller is going to Paris next week")
-    tool_reply = m.requests[-1]["messages"][-1]["content"]
-    check("T-04a", "a city is not accepted; the model is told to ask",
-          "not a country or US state" in tool_reply and conv.pending is None)
+    check("T-04a", "a city is not accepted: country or US state asked with buttons (P-02)",
+          labels(r) == ["France", "Texas", "Somewhere else"] and has_cancel(r)
+          and "city" in r.card["message"])
 
     svc = build_services()
     adv = Session(advisor_id="ADV-1234")
@@ -187,7 +193,7 @@ def run():
           r.status == "awaiting_confirmation" and r.data["input"]["destination"] == ["Spain", "Portugal"])
     r = dispatch(svc, adv, "travel_notice", {**form, "destination": ["Japan"],
                                              "end_date": str(start + timedelta(days=14))})
-    check("T-05a", "15 days refused", "at most 14 days" in r.message)
+    check("T-05a", "15 days refused", "at most 14" in r.message)
     r = dispatch(svc, adv, "travel_notice", {**form, "destination": ["Japan"],
                                              "end_date": str(start + timedelta(days=13))})
     check("T-05b", "exactly 14 days accepted", r.status == "awaiting_confirmation")
@@ -204,6 +210,12 @@ def run():
                destination=["Georgia"], start_date=str(start),
                end_date=str(start + timedelta(days=13))))
     r = conv.send("Georgia (country)")
+    check("T-20c", "vague dates: the travel card opens with Georgia (country) filled in (P-03)",
+          r.card["kind"] == "travel_form" and r.card["destinations"] == ["Georgia (country)"]
+          and not r.card["start"])
+    r = conv.send("travel_form:" + json.dumps({"destinations": ["Georgia (country)"],
+                                               "start": str(start),
+                                               "end": str(start + timedelta(days=13))}))
     dest = next(f["value"] for f in r.card["fields"] if f["label"] == "Destination")
     check("T-21a", "panel shows exactly 'Georgia (country)'", dest == "Georgia (country)")
     check("T-22a", "panel carries the dates for the calendar",
@@ -215,7 +227,8 @@ def run():
           r.status == "awaiting_confirmation" and r.data["input"]["start_date"] == str(new_s)
           and len(m.requests) == calls)
     r = conv.send(f"set_dates:{new_s}:{new_s + timedelta(days=20)}")
-    check("T-22a", "calendar dates over 14 days refused", "at most 14 days" in r.message)
+    check("T-22a", "calendar dates over 14 days refused, the card stays open (P-04)",
+          "at most 14" in r.message and r.card and r.card["kind"] == "confirm")
     r = conv.send("confirm")
     check("T-22a", "the panel is still open; Confirm adds the notice",
           r.status == "ok" and svc.cards.travel_notices[-1]["start_date"] == str(new_s))
@@ -226,15 +239,17 @@ def run():
     _, conv = fresh(m, "ADV-5678")
     r = conv.send("I want to report a stolen card for Claire Beaumont")
     check("T-06a", "pending card: lost/stolen refused by code, with what is allowed",
-          r.data.get("code") == "card_pending" and "order a replacement" in r.message)
+          r.data.get("code") == "card_pending" and "Replace the card" in labels(r)
+          and has_cancel(r))
     m = ScriptedModel(route("replace-card"), call("find_client", query="Claire Beaumont"),
                       call("list_cards", client_id="C-15644"),
                       call("replace_card", client_id="C-15644", card_id="CARD-5645",
                            reason="not received"))
     _, conv = fresh(m, "ADV-5678")
     r = conv.send("Claire Beaumont never received her card, please replace it")
-    check("T-06b", "pending card may be replaced, but her only address is outside the US",
-          r.data.get("code") == "address_not_us" and "no US address" in r.message)
+    check("T-06b", "pending card may be replaced; no US address: offers to add one (P-05)",
+          "no US address" in r.message and labels(r) == ["Add a US delivery address"]
+          and has_cancel(r))
 
     print("\nF-08  Volume limit")
     svc = build_services(); audit.reset()
@@ -254,8 +269,8 @@ def run():
     conv.send("Claire Beaumont's card was stolen")
     m.add(route("replace-card"), say("I'll do that instead."))
     r = conv.send("Got it. So she never actually got the card and now needs to replace it.")
-    check("T-10a", "a 'will do' reply gets 'Nothing has been changed yet.'",
-          r.message.endswith(NOTHING_YET))
+    check("T-10a", "the model's 'will do' text is never shown; code asks with a card",
+          "I'll do that" not in r.message and r.card and r.card["kind"] == "client_input")
     m = ScriptedModel(route("report-lost-stolen"), call("find_client", query="Jane Miller"),
                       call("list_cards", client_id="C-88210"),
                       call("switch_action", action="replace-card"),
@@ -263,7 +278,9 @@ def run():
     _, conv = fresh(m)
     r = conv.send("Jane Miller lost her card, actually just send her a new one")
     check("T-10a", "switch_action hands over to the other skill (no promise)",
-          conv.task and conv.task["skill"].name == "replace-card" and labels(r)[0] == "Damaged")
+          conv.task and conv.task["skill"].name == "replace-card"
+          and r.card["title"] == "Delivery address"
+          and conv.task["form"]["args"].get("reason") == "lost")
 
     print("\nF-11  Text is data, not instructions")
     m = ScriptedModel(route("close-card"), call("find_client", query="Hiroshi Tanaka"),
@@ -362,14 +379,14 @@ def run():
     conv.send("Lock Sarah Chen's card")
     hist = " ".join(str(h.get("content")) for h in conv.history)
     check("T-26a", "a panel is never stored as a numbered list the model could copy",
-          "1. Sarah Chen" not in hist and "shown as buttons" in hist)
+          "1. Sarah Chen" not in hist and "shown on a card" in hist)
     m = ScriptedModel(route("lock-card"),
                       say("Which client do you mean?\n1. Sarah Chen · Boston\n2. Sarah M. Chen · Chicago"))
     _, conv = fresh(m)
     r = conv.send("lo Sarah Chen's card again")
-    check("T-26a", "a list written as text by the model becomes buttons",
-          r.card and r.card["kind"] == "choice" and labels(r) == ["Sarah Chen · Boston",
-                                                                   "Sarah M. Chen · Chicago"])
+    check("T-26a", "a list written as text by the model is not shown; code asks with buttons",
+          r.card and r.card["kind"] == "choice" and r.card["title"] == "Which client?"
+          and len(labels(r)) == 2 and "1." not in r.message.split("\n")[0])
 
     print("\nF-27  Typo: ask the advisor to confirm before going on")
     unsure = {"role": "assistant", "content": '{"skill": "lock-card", "certain": false}'}
@@ -388,7 +405,7 @@ def run():
     conv.send("lo Sarah Chen's card")
     r = conv.send("No, something else")
     check("T-27b", "No: the actions as buttons", len(labels(r)) == 7
-          and r.card["title"] == "Which action?")
+          and r.card["title"] == "Actions")
     m = ScriptedModel(route("lock-card"), call("find_client", query="Sarah Chen"))
     _, conv = fresh(m)
     r = conv.send("Lock Sarah Chen's card")
@@ -400,7 +417,7 @@ def run():
     _, conv = fresh(m)
     r = conv.send("Lock Robert Castellano's card")
     check("T-R01", "asks which card, never picks one", r.card["title"] == "Which card?"
-          and len(r.card["actions"]) == 2)
+          and len(labels(r)) == 2 and has_cancel(r))
     m.add(call("lock_card", client_id="C-10220", card_id="CARD-2201"))
     r = conv.send("...2201 (active)")
     check("T-R02", "confirm arrives as a panel", r.card and r.card["kind"] == "confirm")

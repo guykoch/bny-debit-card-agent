@@ -32,6 +32,10 @@
       "flag_transactions": {
         "type": "boolean",
         "description": "Only when the reason is lost or stolen: true if the client does not recognise recent transactions. The system asks with buttons."
+      },
+      "reason_detail": {
+        "type": "string",
+        "description": "Only for reason 'other': what the other reason is. Typed by the advisor on the card."
       }
     },
     "required": [

@@ -126,6 +126,27 @@ def info() -> dict:
                                   and settings.GOOGLE_MAPS_API_KEY) else "sample")}
 
 
+def client_suggestions(advisor_id: str, text: str) -> list[dict]:
+    text = (text or "").strip()[:80]
+    if len(text) < 2 or not advisor_id:
+        return []
+    directory = services().clients
+    found = directory.find(text, advisor_id)
+    if not found and hasattr(directory, "find_similar"):
+        found = directory.find_similar(text, advisor_id)
+    if not found:                                        # first letters of any name part
+        low = text.lower()
+        found = [c for c in getattr(directory, "_clients", [])
+                 if any(w.startswith(low) for w in c.name.lower().split())
+                 and services().entitlements.can(advisor_id, c.client_id, "view")]
+    out = []
+    for c in found[:6]:
+        bits = [c.name] + ([c.city] if getattr(c, "city", "") else []) + \
+               ([f"born {c.birth_year}"] if getattr(c, "birth_year", "") else [])
+        out.append({"id": c.client_id, "label": " · ".join(bits)})
+    return out
+
+
 def list_audit() -> list:
     if settings.active_store() == "convex":
         from integrations.convex_store.client import ConvexClient
@@ -168,6 +189,14 @@ def route(method: str, path: str, headers, body: bytes):
         return js(401, {"status": "error", "message": "Passcode required.", "card": None})
     if method == "GET" and path == "/api/audit":
         return js(200, list_audit())
+    if method == "GET" and path == "/api/places/suggest":
+        # Travel destinations on BNY's list (countries + US states), as the advisor types.
+        from core import places
+        return js(200, {"suggestions": places.suggest_destinations(params.get("q", ""))})
+    if method == "GET" and path == "/api/clients/suggest":
+        # Client names for the "Which client?" field - only this advisor's own clients.
+        return js(200, {"suggestions": client_suggestions(params.get("advisor", ""),
+                                                          params.get("q", ""))})
     if method == "GET" and path == "/api/address/suggest":
         # Address autofill. The provider key (Google) stays on this server.
         from integrations import address_lookup

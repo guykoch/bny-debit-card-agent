@@ -796,6 +796,19 @@ checks, by tracker test ID). Key changes:
   `npx convex deploy` was needed for this change.
 - The conversation snapshot now also keeps the task's `form` and `resume`, so code-built
   buttons continue without a model call after save/restore.
+- **Second round (F-30 to F-46, from `pending_fixes.md` P-01 to P-17): code decides, the
+  model only finds the client and the card.** In a skill turn the model's text is never shown;
+  `_advance()` asks the next question with a card (client field with suggestions, card, reason,
+  "Other" text box, address, city buttons, travel form with destinations + calendar, lock or
+  close). Model-filled values are kept only when the advisor's words in the current request
+  support them (`_sanitize`); every message without an open card is a new request (nothing
+  carried over). Every card has Cancel (`__cancel__`). Header **Actions** button
+  (`__actions__`) opens the action menu. Close has a required, editable Reason box on the red
+  card (checked again on Confirm). Travel dates are read only when written out
+  (`core/dates.py`), otherwise the travel card's calendar opens; valid trips show the dates
+  editable on the confirm card. "Did you do anything?" is answered by code from what ran.
+  New endpoints `/api/places/suggest`, `/api/clients/suggest` (this advisor's clients only).
+  Checks: `tests/test_pending.py`. No Convex change.
 
 ## 10. Known gaps and inconsistencies (verified against the code — fix only when asked)
 

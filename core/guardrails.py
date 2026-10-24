@@ -207,6 +207,9 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
         spec.precheck(ti, target, services)
     # unusual volume (runs at the panel and again at Confirm)
     _check_volume(session, tool_name)
+    # values only the advisor can give on the panel itself (e.g. the reason for closing)
+    if confirmed and spec.confirm_check:
+        spec.confirm_check(ti)
 
     # 3. confirmation
     if not confirmed:
@@ -214,11 +217,12 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
                            else spec.summary(ti, target))
         card_payload = cards.confirm_card(spec.title, fields, warning, spec.confirm_label,
                                           extra_actions=spec.extra_actions, danger=spec.danger,
-                                          ack=spec.ack)
+                                          ack=spec.ack,
+                                          text_input=spec.text_input(ti) if spec.text_input else None)
         if tool_name == "travel_notice":
-            # lets the chat's date picker start from the dates shown
+            # the dates are editable on the card itself (date fields, pre-filled)
             card_payload["dates"] = {"start": ti["start_date"], "end": ti["end_date"],
-                                     "max_days": settings.MAX_TRAVEL_DAYS}
+                                     "max_days": settings.MAX_TRAVEL_DAYS, "inline": True}
         return ToolResponse(status="awaiting_confirmation",
                             message=cards.to_text(card_payload),
                             card=card_payload,

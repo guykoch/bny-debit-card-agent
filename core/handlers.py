@@ -16,6 +16,7 @@ Two kinds of check per action, both plain code:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Callable, Optional
@@ -42,6 +43,8 @@ class ActionSpec:
     follow_up_actions: Optional[list] = None   # buttons under that sentence
     client_level: bool = False            # acts on the client's profile, not on a card
     ack: Optional[str] = None             # a box the advisor must tick before Confirm
+    text_input: Optional[Callable] = None  # (tool_input) -> required text box on the panel
+    confirm_check: Optional[Callable] = None  # (tool_input) -> raises; only on Confirm
 
 
 # ---------------------------------------------------------------- shared bits
@@ -129,9 +132,8 @@ def _replace_precheck(ti, card, services):
     if match is None:
         raise NotPossible(
             "address_not_in_profile",
-            f"That address is not in {card.client_name}'s profile. A replacement can only "
-            "be sent to an address on file; a new address has to be added to the client's "
-            "profile in NetX360 first.")
+            f"That address is not in {card.client_name}'s profile. Pick one of the "
+            "addresses on file, or add a new delivery address.")
     if match.country.upper() != "US" or not places.us_region(match.state):
         raise NotPossible("address_not_us",
                           "Replacement cards can only be sent to an address in the United "
@@ -149,8 +151,15 @@ def _replace_execute(svc, session, ti, card):
                              flag_transactions=bool(ti.get("flag_transactions", False)))
 
 
+def reason_label(ti) -> str:
+    r = ti.get("reason", "")
+    nice = {"not received": "Never received"}.get(r, r.capitalize())
+    detail = (ti.get("reason_detail") or "").strip()
+    return f"{nice}: {detail}" if detail else nice
+
+
 def _replace_summary(ti, card):
-    fields = _base_fields(card) + [("Reason", ti["reason"]),
+    fields = _base_fields(card) + [("Reason", reason_label(ti)),
                                    ("Deliver to", ti["delivery_address"])]
     if ti.get("reason") in ("lost", "stolen"):
         fields.append(("Flag recent transactions",
@@ -170,8 +179,40 @@ def _close_execute(svc, session, ti, card):
     return svc.cards.close(card.card_id, session.advisor_id, reason=ti["reason"])
 
 
+# Words that only describe the closing itself - never a reason (P-06).
+_NOT_REASONS = {"permanently", "permanent", "for good", "close", "closed", "closing", "cancel",
+                "cancelled", "now", "please", "asap", "today", "immediately", "the card", "card",
+                "it", "yes", "ok", "advisor request", "n/a", "na", "none", "-", "."}
+
+
+def close_reason_problem(reason: str) -> str | None:
+    """None when `reason` is a real reason; otherwise what is wrong with it."""
+    r = re.sub(r"\s+", " ", (reason or "").strip())
+    if not r:
+        return "Please type the reason for closing the card."
+    if len(r) > 200:
+        return "Please keep the reason under 200 characters."
+    words = [w for w in re.split(r"[^a-z']+", r.lower()) if w]
+    if r.lower() in _NOT_REASONS or (words and all(w in _NOT_REASONS for w in words)):
+        return f"'{r}' is not a reason. Please say why the card is being closed."
+    return None
+
+
+def _close_text_input(ti):
+    return {"name": "reason", "label": "Reason", "required": True,
+            "placeholder": "Reason for closing, e.g. switching banks",
+            "value": ti.get("reason") or ""}
+
+
+def _close_confirm_check(ti):
+    problem = close_reason_problem(ti.get("reason", ""))
+    if problem:
+        raise NotPossible("reason_required", problem)
+    ti["reason"] = re.sub(r"\s+", " ", ti["reason"].strip())
+
+
 def _close_summary(ti, card):
-    return (_base_fields(card) + [("Reason", ti["reason"])],
+    return (_base_fields(card),
             "This closes the debit card permanently and cannot be undone. The account "
             "stays open; a new card would have to be issued.")
 
@@ -215,27 +256,32 @@ def _travel_precheck(ti, card, services=None):
         start = date.fromisoformat(ti["start_date"])
         end = date.fromisoformat(ti["end_date"])
     except ValueError:
-        raise BadRequest("Dates must be written as YYYY-MM-DD.")
+        raise NotPossible("dates_invalid", "Please pick the travel dates.")
     if end < start:
-        raise BadRequest("The end date is before the start date.")
+        raise NotPossible("dates_invalid", "The end date is before the start date.")
     if start < date.today():
-        raise BadRequest("The start date is in the past.")
+        raise NotPossible("dates_invalid", "The start date is in the past.")
     if trip_days(start, end) > settings.MAX_TRAVEL_DAYS:
-        raise BadRequest(f"A travel notice can cover at most {settings.MAX_TRAVEL_DAYS} days. "
-                         f"For a longer trip, add another notice later.")
+        raise NotPossible("dates_invalid",
+                          f"Those dates cover {trip_days(start, end)} days, and a travel notice "
+                          f"can cover at most {settings.MAX_TRAVEL_DAYS}. Please pick dates within "
+                          f"{settings.MAX_TRAVEL_DAYS} days (add another notice for the rest).")
 
     dests = ti["destination"]
+    if not dests:
+        raise NotPossible("destination_invalid", "Please add at least one destination.")
     if len(dests) > settings.MAX_TRAVEL_DESTINATIONS:
-        raise BadRequest(f"A travel notice can list at most "
-                         f"{settings.MAX_TRAVEL_DESTINATIONS} destinations.")
+        raise NotPossible("destination_invalid", f"A travel notice can list at most "
+                                                 f"{settings.MAX_TRAVEL_DESTINATIONS} destinations.")
     clean = []
     for d in dests:
         kind, value = places.resolve_destination(d)
         if kind == "ambiguous":
-            raise BadRequest(f"'{d}' could mean {' or '.join(value)}. Which one?")
+            raise NotPossible("destination_invalid", f"'{d}' could mean {' or '.join(value)}. Which one?")
         if kind == "unknown":
-            raise BadRequest(f"'{d}' is not a country or US state on BNY's list. "
-                             "Which country or US state is it in?")
+            raise NotPossible("destination_invalid",
+                              f"'{d}' is not a country or US state on BNY's list. "
+                              "Which country or US state is it in?")
         if value not in clean:
             clean.append(value)
     ti["destination"] = clean                          # exactly as listed, e.g. "Georgia (country)"
@@ -336,7 +382,8 @@ ACTIONS: dict[str, ActionSpec] = {
     "close_card": ActionSpec(
         title="Close debit card permanently", execute=_close_execute,
         summary=_close_summary, state_check=_close_state,
-        confirm_label="Close permanently", danger=True),
+        confirm_label="Close permanently", danger=True,
+        text_input=_close_text_input, confirm_check=_close_confirm_check),
 
     "report_lost_stolen": ActionSpec(
         title="Report card lost or stolen", execute=_lost_execute,
@@ -346,8 +393,7 @@ ACTIONS: dict[str, ActionSpec] = {
 
     "travel_notice": ActionSpec(
         title="Add travel notice", execute=_travel_execute,
-        summary=_travel_summary, state_check=_travel_state, precheck=_travel_precheck,
-        extra_actions=[{"label": "Change dates", "value": "change_dates"}]),
+        summary=_travel_summary, state_check=_travel_state, precheck=_travel_precheck),
 
     "update_address": ActionSpec(
         title="Update client address", execute=_addr_execute,

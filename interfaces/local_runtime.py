@@ -36,7 +36,7 @@ from core.handlers import ACTIONS, allowed_addresses
 from core.models import Session, ToolResponse
 
 YES = {"yes", "y", "confirm", "ok", "okay", "go ahead", "do it", "proceed"}
-NO = {"no", "n", "cancel", "stop"}
+NO = {"no", "n", "cancel", "stop", "__cancel__"}
 CHANGE_DATES = "change_dates"          # value of the travel notice's "Change dates" button
 SET_DATES = re.compile(r"^set_dates:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$")
 
@@ -210,9 +210,27 @@ class Conversation:
     def send(self, text: str) -> ToolResponse:
         self.session.utterance = text
         low = text.strip().lower()
+        if low in ("__cancel__", "__actions__"):          # Cancel on every card; Actions button
+            self.pending = None
+            if low == "__cancel__":
+                return ToolResponse(status="ok", message="Cancelled. Nothing was changed.")
+            return ToolResponse(status="needs_input", message=(
+                "Type the action and the client, for example: Lock Jane Miller's card."))
 
         # answering a confirmation (trip 2 - no interpretation, just a replay)
         if self.pending and self.pending.get("awaiting_confirm"):
+            if low.startswith("confirm_with:"):            # values typed on the card itself
+                import json as _json
+                try:
+                    extra = _json.loads(text.strip()[len("confirm_with:"):]) or {}
+                except ValueError:
+                    extra = {}
+                if extra.get("reason"):
+                    self.pending["input"]["reason"] = str(extra["reason"])[:300]
+                if extra.get("start") and extra.get("end") and \
+                        self.pending["tool"] == "travel_notice":
+                    self.pending["input"].update(start_date=extra["start"], end_date=extra["end"])
+                low = "confirm"
             if low in YES:
                 p = self.pending; self.pending = None
                 # the audit should record what the advisor asked for, not "yes"
@@ -290,6 +308,9 @@ class Conversation:
         for o in options:                                   # button click / exact
             if t in (str(o["value"]).lower(), o["label"].lower()):
                 return o["value"]
+        options = [o for o in options if o.get("style") != "cancel"]   # Cancel: exact only
+        if not options:
+            return None
         if t.isdigit() and 1 <= int(t) <= len(options):      # "2"
             return options[int(t) - 1]["value"]
         words = re.findall(r"[a-z0-9]+", t)                  # "the second one"

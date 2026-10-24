@@ -36,7 +36,7 @@ in the demo are on the tracker's Tests sheet.
 | F-11 | Text in names, notes and addresses is data, not instructions | `_shared.md`, runtime notes |
 | F-12 | Replace flow: profile addresses as buttons; "A different address" explains the profile rule | llm_runtime `_address_panel`, replace-card SKILL.md |
 | F-13 | PIN requests get a fixed reply (code, no AI) | local_runtime `is_pin_request` |
-| F-14 | Typos read through; if still unclear, the six actions as buttons | llm_runtime routing |
+| F-14 | Typos read through; if still unclear, the seven actions as buttons | llm_runtime routing |
 | F-15 | "Close the debit card", account stays open | handlers `_close_summary`, close-card SKILL.md |
 | F-16 | Unrecognised-transactions question only when the replacement reason is lost or stolen | llm_runtime `_ask_missing` |
 | F-17 | "Already locked" / "no locked card" from code as soon as the card is known | handlers `state_check`, llm_runtime `_state_stop` |
@@ -68,10 +68,41 @@ in the demo are on the tracker's Tests sheet.
 | F-28 | New action **update address** (7th skill). The chat asks with buttons: change an address in the client's profile, or add a new delivery address for a replacement card. With more than one profile address, it asks which one. The new address comes only from the address search; the confirm panel is red and needs the advisor to tick "The client asked for this change and I verified their identity" (logged). After adding a delivery address it offers the replacement; from inside a replacement ("A different address") it adds the address and goes straight back to the replacement panel. | `skills/debit-card/update-address/`, `tools/update_address.json`, handlers `_addr_*`, llm_runtime `_ask_missing`, `_address_answer`, `_start_new_delivery`, `_after_address` |
 | F-29 | Address search (autofill) for every address entry: Google Places (New) when `GOOGLE_MAPS_API_KEY` is set, otherwise a built-in demo list; US and territories only; the key stays on the server; the picked address is looked up again on the server. Apartment / suite line optional. | `integrations/address_lookup.py`, `/api/address/suggest`, web/index.html `renderAddress` |
 
+## Second round of live testing (pending_fixes.md P-01 to P-17)
+
+The main change: **code decides, the model only finds the client and the card.**
+The model's own text is never shown in a skill turn; whatever it wanted to ask,
+code asks with a card. Model-filled values are kept only when the advisor's
+words in the current request support them. Every message without an open card
+is a new request. Checks: `python -m tests.test_pending` (by tracker test ID).
+
+| Fix | Pending | What changed | Where |
+|---|---|---|---|
+| F-30 | P-01 | Replacement to a place that is not on file: the refusal plus the client's US addresses as buttons, plus "A different address" | llm_runtime `_delivery_from_words`, `_address_panel`; handlers message |
+| F-31 | P-02 | A city gets buttons for the country or US state it may be in, plus "Somewhere else" (opens the travel card) | `places.CITIES`, llm_runtime `_travel_fields` |
+| F-32 | P-03 | Dates are read only when written out ("November 20 to 30"); vague dates open the travel card's calendar, nothing is proposed | `core/dates.py`, travel-notice SKILL.md |
+| F-33 | P-04 | Over 14 days, or a place not on the list: the travel card again, with the reason on it | handlers `_travel_precheck`, llm_runtime `_action` |
+| F-34 | P-05 | Pending card with no US address: "Add a US delivery address" instead of a refusal; a pending card's allowed actions offered as buttons | llm_runtime `_address_panel`, `_state_stop` |
+| F-35 | P-06 | Close: required Reason box on the red card, editable; "permanently", "client request" and similar are not reasons; checked again on Confirm | handlers `close_reason_problem`, `_close_text_input`, `_close_confirm_check` |
+| F-36 | P-07 | Close is never restated in text; "cancel her card" asks Lock or Close with buttons | close-card SKILL.md, llm_runtime `_action` |
+| F-37 | P-08 | "Did you do anything?" answered by code from what actually ran; an open card is shown again | llm_runtime `_is_status_question`, `_status_reply` |
+| F-38 | P-09 | Travel details on one card: destinations with suggestions (max 10) and From / To dates | `cards.travel_form_card`, `/api/places/suggest`, web/index.html `renderTravelForm` |
+| F-39 | P-10 | A new request starts clean: no reason, client, card, place or date carried over | llm_runtime `send` step 4, `_sanitize` |
+| F-40 | P-11 | Reason "Other" opens a required text box; the panel shows "Other: ..." | `cards.text_input_card`, handlers `reason_label` |
+| F-41 | P-12 | Cancel on every card | `cards.CANCEL`, web/index.html `cancelRow` |
+| F-42 | P-13 | A different action switches by itself (same client and card, nothing reused from the old card) | llm_runtime `switch_action`, `send` |
+| F-43 | P-14 | Valid trip: confirmation card with the dates editable on it; the 14-day limit mentioned only when exceeded | guardrails (`dates.inline`), web/index.html `renderConfirm` |
+| F-44 | P-15 | Model text with options is never shown; the history note never lists options; typo check works with an older request open | llm_runtime `_skill_turn`, `_say`, `_client_from_words` |
+| F-45 | P-16 | "Actions" button in the header: the seven actions, then "Which client?" (this advisor's clients as suggestions), then the normal cards | web/index.html, llm_runtime `_action_menu`, `_client_card`, `/api/clients/suggest` |
+| F-46 | P-17 | Every follow-up from the menu is a card; no client carried over from an earlier request | llm_runtime `_advance`, `_find_client` guard |
+
+No Convex change this round: push to GitHub and Vercel redeploys; `npx convex
+deploy` is not needed (unless it was not run after F-28).
+
 Profile addresses now change during a demo, so they live in Convex on the hosted
 demo (new `addresses` table; Reset restores them from `addresses.csv`).
 
-## Redeploy Convex this time
+## Convex
 
-`convex-demo-db/` changed (addresses table and functions). After pushing, run
-`npx convex deploy` from `convex-demo-db/` once.
+`convex-demo-db/` changed with F-28 (addresses table and functions). If
+`npx convex deploy` was already run after that, nothing to do this round.
