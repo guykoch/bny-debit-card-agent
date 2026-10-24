@@ -223,10 +223,38 @@ class GptConversation:
         self.history.append({"role": "developer", "content": f"Context: {text}"})
 
     def _say(self, response: ToolResponse) -> ToolResponse:
-        """Record what the advisor was shown, so the model sees it next turn."""
-        if response.message:
+        """
+        Record what the advisor was shown, so the model sees it next turn.
+
+        A panel is recorded as its question plus a note listing the buttons - never
+        as a numbered list - so the model has no list of options to copy as text (F-26).
+        """
+        card = response.card or {}
+        if card.get("kind") in ("choice", "confirm"):
+            question = card.get("message") or card.get("title") or "(panel)"
+            self.history.append({"role": "assistant", "content": question})
+            if card.get("kind") == "choice":
+                opts = " | ".join(a["label"] for a in card.get("actions", []))
+                self._note(f"that question was shown as buttons: {opts}.")
+        elif response.message:
             self.history.append({"role": "assistant", "content": response.message})
         return response
+
+    def _text_or_buttons(self, reply: str) -> ToolResponse:
+        """
+        F-26: options are always buttons. If the model wrote a list of choices as
+        text ("1. ...", "- ...", "A or B?"), code turns it into a choice panel.
+        """
+        lines = [l.rstrip() for l in reply.splitlines()]
+        item = re.compile(r"^\s*(?:\d+[.)]|[-*•])\s+(.+)$")
+        opts = [m.group(1).strip() for l in lines if (m := item.match(l))]
+        if len(opts) >= 2:
+            question = " ".join(l.strip() for l in lines if l.strip() and not item.match(l))
+            question = question or "Which one?"
+            panel = cards.choice_card("", question, [{"label": o, "value": o} for o in opts[:6]])
+            self.pending = {"kind": "options", "panel": panel}
+            return ToolResponse(status="needs_input", message=cards.to_text(panel), card=panel)
+        return ToolResponse(status="needs_input", message=reply)
 
     def _new_task(self, skill) -> None:
         self.task = {"skill": skill, "texts": [], "picked": {}}
@@ -336,6 +364,15 @@ class GptConversation:
             skill = self._route()
         except ModelUnavailable as e:
             return self._model_down(e)
+        if isinstance(skill, tuple):                         # F-27: a typo - check first
+            skill = skill[0]
+            if self.task is None or self.task["skill"].name != skill.name:
+                verb = ACTION_LABELS[skill.name]
+                return self._say(self._ask(
+                    f"verify:{skill.name}|" + text[:300], "Just to check",
+                    f"Did you mean: {verb.lower()}?",
+                    [{"label": f"Yes, {verb[0].lower() + verb[1:]}", "value": "yes"},
+                     {"label": "No, something else", "value": "no"}]))
         if skill == "unclear":                               # F-14: ask, with buttons
             return self._ask("action:" + text[:300], "Which action?",
                              "I'm not sure which card action you need. Which one?",
@@ -350,6 +387,16 @@ class GptConversation:
 
     def _picked(self, field: str, value, label: str) -> ToolResponse:
         """Apply an answer the advisor gave on a code-built panel."""
+        if field.startswith("verify:"):                      # F-27: answer to "Did you mean?"
+            name, _, original = field[len("verify:"):].partition("|")
+            if value == "yes":
+                self._new_task(skills.get(name))
+                self.task["texts"].append(original)
+                self._note(f"the advisor confirmed they meant: {ACTION_LABELS[name]}.")
+                return self._skill_turn()
+            return self._say(self._ask(
+                "action:" + original, "Which action?", "Which card action do you need?",
+                [{"label": ACTION_LABELS[s.name], "value": s.name} for s in skills.all_skills()]))
         if field.startswith("action:"):                      # F-14: which action
             self._new_task(skills.get(value))
             self.task["texts"].append(field[len("action:"):])
@@ -412,7 +459,9 @@ class GptConversation:
             "card skill. Reply with the skill name only.\n\nSkills:\n" + "\n".join(lines) + "\n\n"
             "Rules:\n"
             "- Advisors type fast. Read through typos and near-misses (\"but a travel notice\" "
-            "means put a travel notice; \"lcok\" means lock).\n"
+            "means put a travel notice; \"lcok\" or \"lo\" means lock), but then set certain to "
+            "false: the system asks the advisor to confirm. Set certain to true only when the "
+            "action is written clearly, or the message answers the assistant's question.\n"
             "- Return none when the latest message is not a request for one of these actions: "
             "greetings, what can you do, balances, transactions, statements, PINs, which cards a "
             "client has or their status, and anything else.\n"
@@ -434,17 +483,22 @@ class GptConversation:
             response_format={"type": "json_schema", "json_schema": {
                 "name": "route", "strict": True,
                 "schema": {"type": "object", "additionalProperties": False,
-                           "required": ["skill"],
-                           "properties": {"skill": {"type": "string", "enum": names}}}}})
+                           "required": ["skill", "certain"],
+                           "properties": {"skill": {"type": "string", "enum": names},
+                                          "certain": {"type": "boolean"}}}}})
         try:
-            name = json.loads(reply.get("content") or "{}").get("skill")
+            parsed = json.loads(reply.get("content") or "{}")
+            name, certain = parsed.get("skill"), parsed.get("certain", True)
         except json.JSONDecodeError:
-            name = None
+            name, certain = None, True
         if name in (None, "none"):
             return None
         if name == "unclear":
             return "unclear"
-        return skills.get(name)
+        skill = skills.get(name)
+        if skill and certain is False:
+            return (skill,)                                  # a typo: confirm before acting
+        return skill
 
     # ------------------------------------------------------------ AI call 2: fill the form
     def _skill_turn(self) -> ToolResponse:
@@ -465,7 +519,7 @@ class GptConversation:
                 reply = (msg.get("content") or "").strip() or "Could you say that another way?"
                 if _CLAIM.search(reply) and NOTHING_YET.lower() not in reply.lower():
                     reply = f"{reply} {NOTHING_YET}"           # F-10: never a false "done"
-                return self._say(ToolResponse(status="needs_input", message=reply))
+                return self._say(self._text_or_buttons(reply))
 
             call = calls[0]
             messages.append({"role": "assistant", "content": msg.get("content"),

@@ -54,6 +54,13 @@ in the demo are on the tracker's Tests sheet.
 | F-24 | Near spellings offered as "Did you mean?", never chosen silently, never another advisor's client | mock `find_similar` |
 | F-25 | Yes / No buttons after a lost/stolen report | handlers `follow_up_actions`, web/index.html |
 
+## From live testing (after the first round)
+
+| Fix | What changed | Where |
+|---|---|---|
+| F-26 | Options are always buttons: panels are kept in the model's history as a question plus a note (never a numbered list it could copy), and any list the model still writes as text is turned into buttons by code | llm_runtime `_say`, `_text_or_buttons` |
+| F-27 | Typo in the action ("lo Sarah Chen's card"): the router marks it uncertain and code asks "Did you mean: lock the card?" Yes / No before going on; No shows the six actions | llm_runtime `_route` (`certain`), `_picked` |
+
 ## Nothing to redeploy in Convex
 
 No change in `convex-demo-db/`. A push to GitHub is enough.

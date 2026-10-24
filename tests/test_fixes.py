@@ -356,6 +356,44 @@ def run():
     check("T-11b", "fake admin mode changes nothing",
           "No matching client" in m.requests[-1]["messages"][-1]["content"])
 
+    print("\nF-26  Options are always buttons")
+    m = ScriptedModel(route("lock-card"), call("find_client", query="Sarah Chen"))
+    _, conv = fresh(m)
+    conv.send("Lock Sarah Chen's card")
+    hist = " ".join(str(h.get("content")) for h in conv.history)
+    check("T-26a", "a panel is never stored as a numbered list the model could copy",
+          "1. Sarah Chen" not in hist and "shown as buttons" in hist)
+    m = ScriptedModel(route("lock-card"),
+                      say("Which client do you mean?\n1. Sarah Chen · Boston\n2. Sarah M. Chen · Chicago"))
+    _, conv = fresh(m)
+    r = conv.send("lo Sarah Chen's card again")
+    check("T-26a", "a list written as text by the model becomes buttons",
+          r.card and r.card["kind"] == "choice" and labels(r) == ["Sarah Chen · Boston",
+                                                                   "Sarah M. Chen · Chicago"])
+
+    print("\nF-27  Typo: ask the advisor to confirm before going on")
+    unsure = {"role": "assistant", "content": '{"skill": "lock-card", "certain": false}'}
+    m = ScriptedModel(unsure)
+    _, conv = fresh(m)
+    r = conv.send("lo Sarah Chen's card")
+    check("T-27a", "asks 'Did you mean: lock the card?' with Yes / No",
+          r.card["message"] == "Did you mean: lock the card?"
+          and values(r) == ["yes", "no"] and len(m.requests) == 1)
+    m.add(call("find_client", query="Sarah Chen"))
+    r = conv.send("yes")
+    check("T-27a", "Yes: continues with the lock, original words kept",
+          conv.task["skill"].name == "lock-card" and r.card["title"] == "Which client?")
+    m = ScriptedModel(unsure)
+    _, conv = fresh(m)
+    conv.send("lo Sarah Chen's card")
+    r = conv.send("No, something else")
+    check("T-27b", "No: the six actions as buttons", len(labels(r)) == 6
+          and r.card["title"] == "Which action?")
+    m = ScriptedModel(route("lock-card"), call("find_client", query="Sarah Chen"))
+    _, conv = fresh(m)
+    r = conv.send("Lock Sarah Chen's card")
+    check("T-27c", "a clearly written action is not double-checked", r.card["title"] == "Which client?")
+
     print("\nRe-tests")
     m = ScriptedModel(route("lock-card"), call("find_client", query="Robert Castellano"),
                       call("list_cards", client_id="C-10220"))
