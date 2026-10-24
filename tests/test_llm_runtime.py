@@ -238,7 +238,9 @@ def run():
                       say("No matching client found."))
     _, conv = fresh(m, advisor="ADV-5678")
     r = conv.send("Lock Jane Miller's card")
-    check("not found", "No matching client" in m.requests[-1]["messages"][-1]["content"])
+    check("not found, said on the client card (P2-01), same as a name that doesn't exist",
+          r.card and r.card["kind"] == "client_input"
+          and r.card.get("notice") == "No client named Jane Miller was found.")
 
     print("\n11. If the model is down, nothing changes")
     svc, conv = fresh(DownModel())

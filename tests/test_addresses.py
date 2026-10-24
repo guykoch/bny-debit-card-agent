@@ -95,7 +95,7 @@ def run():
                       call("replace_card", client_id="C-88210", card_id="CARD-4417",
                            reason="damaged"))
     svc, conv = fresh(m)
-    conv.send("Jane's card is cracked, send her a new one")
+    conv.send("Jane Miller's card is cracked, send her a new one")
     r = conv.send("A different address")
     check("T-28d", "address search opens", r.card["kind"] == "address_input")
     r = conv.send(f"address_pick:{pick_id('1100 Congress')}|")
@@ -127,7 +127,7 @@ def run():
         conv.restore(state)
         return r
 
-    hop("Jane's card is cracked, send her a new one")
+    hop("Jane Miller's card is cracked, send her a new one")
     hop("A different address")
     hop(f"address_pick:{pick_id('1100 Congress')}|")
     r = hop("confirm_ack")

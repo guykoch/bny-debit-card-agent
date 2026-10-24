@@ -809,6 +809,13 @@ checks, by tracker test ID). Key changes:
   editable on the confirm card. "Did you do anything?" is answered by code from what ran.
   New endpoints `/api/places/suggest`, `/api/clients/suggest` (this advisor's clients only).
   Checks: `tests/test_pending.py`. No Convex change.
+- **Third round (F-47 to F-51, `pending_fixes_2.md`):** "not found" said on the client card;
+  pronoun follow-ups ("she") and partial names ("Jane") get a one-tap "Is this for ...?" check
+  (`last_client` is kept in the snapshot); address suggestions are selected first so the
+  apartment line can be added ("Use this address"); an address typed in the message is
+  explained (outside the US) or pre-filled. Checks: `tests/test_pending2.py`. No Convex change.
+- Integration note: the demo's `/api/clients/suggest` takes the advisor from the page (the
+  advisor dropdown). In the BNY version it must come from the NetX360 sign-in.
 
 ## 10. Known gaps and inconsistencies (verified against the code — fix only when asked)
 

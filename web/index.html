@@ -120,6 +120,9 @@
   .addr .sug span { color: var(--hint); }
   .addr .sug:hover { border-color: var(--blue); background: var(--blue-tint); }
   .addr .pw { font-size: 10.5px; color: var(--hint); margin-bottom: 8px; }
+  .addr .chosen { border: 1.5px solid var(--blue); background: var(--blue-tint); border-radius: 8px;
+    padding: 6px 10px; margin-bottom: 6px; font-size: 13.5px; display: flex; flex-direction: column; gap: 2px; }
+  .addr .chosen .lbl { font-size: 11px; color: var(--hint); }
   @media (max-width: 600px) { .addr input { font-size: 16px; } }
   .actbtn { font-weight: 600; color: var(--blue); border-color: var(--blue); }
   .cancelrow { margin-top: 8px; }
@@ -444,11 +447,33 @@ function renderAddress(card) {
   if (card.title) c.appendChild(el("h4", null, esc(card.title)));
   if (card.message) c.appendChild(el("div", "q", esc(card.message)));
   const q = el("input"); q.type = "text"; q.placeholder = "Start typing an address…"; q.autocomplete = "off";
-  const apt = el("input"); apt.type = "text"; apt.placeholder = "Apt, suite, unit (optional)"; apt.autocomplete = "off";
   const sugs = el("div", "sugs"), pw = el("div", "pw", "");
-  c.appendChild(q); c.appendChild(apt); c.appendChild(sugs); c.appendChild(pw);
+  const chosen = el("div", "chosen"); chosen.style.display = "none";
+  const apt = el("input"); apt.type = "text"; apt.placeholder = "Apt, suite, unit (optional)"; apt.autocomplete = "off";
+  c.appendChild(q); c.appendChild(sugs); c.appendChild(pw); c.appendChild(chosen); c.appendChild(apt);
   const session = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^a-zA-Z0-9-]/g, "");
-  let timer = null, seq = 0;
+  let timer = null, seq = 0, picked = null;
+  // P2-03: picking a suggestion only selects it; the unit can still be typed, then "Use this address".
+  const use = el("button", "b primary", "Use this address"); use.disabled = true;
+  const change = el("button", "b", "Change"); change.style.display = "none";
+  function select(sg) {
+    picked = sg;
+    chosen.innerHTML = `<span class="lbl">Selected address</span><b>${esc(sg.text)}</b>`;
+    chosen.style.display = ""; q.style.display = "none"; sugs.innerHTML = ""; pw.textContent = "";
+    change.style.display = ""; use.disabled = false;
+    setTimeout(() => apt.focus(), 30);
+  }
+  change.onclick = () => {
+    if (busy) return;
+    picked = null; chosen.style.display = "none"; q.style.display = ""; change.style.display = "none";
+    use.disabled = true; q.focus(); q.dispatchEvent(new Event("input"));
+  };
+  use.onclick = () => {
+    if (busy || !picked) return;
+    const unit = apt.value.trim().replace(/[|]/g, " ");
+    lockCard(c, use); apt.disabled = true; q.disabled = true;
+    send(`address_pick:${picked.id}|${unit}`, picked.text + (unit ? ` (${unit})` : ""));
+  };
   q.oninput = () => {
     clearTimeout(timer);
     const text = q.value.trim();
@@ -458,30 +483,27 @@ function renderAddress(card) {
       try {
         const res = await fetch(`/api/address/suggest?q=${encodeURIComponent(text)}&session=${session}`, { headers: demoHeaders() });
         const out = await res.json();
-        if (mine !== seq) return;
+        if (mine !== seq || picked) return;
         sugs.innerHTML = "";
         pw.textContent = out.provider === "google" ? "Suggestions powered by Google" : "Demo address list";
         if (!(out.suggestions || []).length) { sugs.appendChild(el("div", "hint", "No matching US address yet - keep typing.")); return; }
         out.suggestions.forEach(sg => {
           const b = el("button", "sug", `<b>${esc(sg.main || sg.text)}</b> <span>${esc(sg.secondary || "")}</span>`);
-          b.onclick = () => {
-            if (busy) return;
-            const unit = apt.value.trim().replace(/[|]/g, " ");
-            lockCard(c, b);
-            send(`address_pick:${sg.id}|${unit}`, sg.text + (unit ? ` (${unit})` : ""));
-          };
+          b.onclick = () => { if (!busy) select(sg); };
           sugs.appendChild(b);
         });
       } catch (e) { sugs.innerHTML = ""; sugs.appendChild(el("div", "hint", "Address search is not available right now.")); }
     }, 250);
   };
   const btns = el("div", "btns");
+  btns.appendChild(use); btns.appendChild(change);
   (card.actions || []).forEach(a => {
-    const btn = el("button", "b", esc(a.label));
+    const btn = el("button", "b cancel", esc(a.label));
     btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
     btns.appendChild(btn);
   });
   c.appendChild(btns);
+  if (card.prefill) { q.value = card.prefill; setTimeout(() => q.dispatchEvent(new Event("input")), 50); }   // P2-05
   setTimeout(() => q.focus(), 50);
   return c;
 }

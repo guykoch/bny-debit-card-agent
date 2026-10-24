@@ -99,6 +99,21 @@ is a new request. Checks: `python -m tests.test_pending` (by tracker test ID).
 No Convex change this round: push to GitHub and Vercel redeploys; `npx convex
 deploy` is not needed (unless it was not run after F-28).
 
+## Third round of live testing (pending_fixes_2.md P2-01 to P2-05)
+
+Checks: `python -m tests.test_pending2` (by tracker test ID).
+
+| Fix | Pending | What changed | Where |
+|---|---|---|---|
+| F-47 | P2-01 | A client the advisor named who can't be found: "No client named ... was found." above the client field. Same words whether the client doesn't exist or belongs to another advisor. One heading on the card. | llm_runtime `_ask_client`, `_written_name`, `_find_client` |
+| F-48 | P2-02 | "she / his card" right after a request: "Is this for Claire Beaumont (...)?" Yes / Another client / Cancel. Nothing runs without the click; a request from the Actions menu or naming another client still starts clean. | llm_runtime `last_client` (kept in the snapshot), `_confirm_client` |
+| F-49 | P2-03 | Picking an address suggestion only selects it; the Apt / suite field, then "Use this address" (or Change). | web/index.html `renderAddress` |
+| F-50 | P2-04 | Part of a name ("Jane") matching one client: "Is this for Jane Miller (New York, born 1979)?" first. No check when the full name is written. | llm_runtime `_full_name_said`, `_client_from_words`, `_find_client` |
+| F-51 | P2-05 | An address typed in the message: outside the US -> said above the address field; a US address -> put in the field so the suggestions show at once. | llm_runtime `_typed_address`, `_outside_us`, `_address_input`; web/index.html (`prefill`) |
+
+Also: "never actually got the card" is now read as the reason Never received.
+No Convex change: push to GitHub and Vercel redeploys.
+
 Profile addresses now change during a demo, so they live in Convex on the hosted
 demo (new `addresses` table; Reset restores them from `addresses.csv`).
 

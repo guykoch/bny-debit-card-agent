@@ -197,6 +197,7 @@ class GptConversation:
         self.skill = None
         self._switches = 0
         self.done: list[dict] = []           # what actually ran in this conversation (P-08)
+        self.last_client: str | None = None  # the client of the latest request (P2-02)
         # Every id a lookup has returned in this conversation. An action may only use
         # these - the "never invent an ID" rule, enforced in code.
         self.seen: set[str] = {session.client_id} if session.client_id else set()
@@ -213,13 +214,14 @@ class GptConversation:
         return {"runtime": "gpt", "advisor_id": self.session.advisor_id,
                 "history": self.history[-80:], "task": task, "pending": self.pending,
                 "seen": sorted(self.seen), "skill": self.skill.name if self.skill else None,
-                "done": self.done[-20:]}
+                "done": self.done[-20:], "last_client": self.last_client}
 
     def restore(self, state: dict) -> None:
         self.history = list(state.get("history") or [])
         self.pending = state.get("pending")
         self.seen = set(state.get("seen") or [])
         self.done = list(state.get("done") or [])
+        self.last_client = state.get("last_client")
         if self.session.client_id:
             self.seen.add(self.session.client_id)
         self.skill = skills.get(state["skill"]) if state.get("skill") else None
@@ -356,6 +358,8 @@ class GptConversation:
                     return ToolResponse(status="needs_input", message=cards.to_text(panel),
                                         card=panel)
                 if len(hits) == 1:
+                    if not self._full_name_said(hits[0]):     # P2-04: "Jane" -> check first
+                        return self._confirm_client(hits[0])
                     return hits[0].client_id
                 if hits:
                     panel = cards.choice_card("Which client?",
@@ -372,18 +376,77 @@ class GptConversation:
 
     def _client_card(self, notice: str = "") -> ToolResponse:
         """P-16/P-17: "Which client?" as a field with suggestions (this advisor's clients)."""
-        q = "Which client is this for?"
+        q = "Type the client's name and pick it from the suggestions."
         if re.search(r"\b(all|every|each)\b.{0,20}\b(cards?|clients?)\b", self._words()):
-            q = "I can change one client's card at a time. Which client is this for?"
+            q = "I can change one client's card at a time. " + q
         panel = cards.client_input_card(q)
         if notice:
             panel["notice"] = notice
         self.pending = {"kind": "client", "panel": panel}
         return ToolResponse(status="needs_input", message=cards.to_text(panel), card=panel)
 
+    _VERBS = {"lock", "unlock", "replace", "close", "add", "report", "cancel", "update",
+              "change", "freeze", "order", "send", "put", "set", "please", "can", "could",
+              "the", "my", "client", "i", "we", "hi", "hello", "actually", "so"}
+    _PRONOUN = re.compile(r"\b(she|he|her|hers|his|him|they|their|them|the client|this client|"
+                          r"same client)\b", re.I)
+
+    def _written_name(self) -> str | None:
+        """A person's name the advisor wrote in this request (two or three capitalised words)."""
+        if self.task and self.task.get("not_found"):
+            return self.task["not_found"]
+        text = " ".join(self.task["texts"]) if self.task else ""
+        months = {m.capitalize() for m in places._MONTH_WORDS}
+        for m in re.finditer(r"\b([A-Z][a-z'\-]+(?:\s+[A-Z]\.?)?(?:\s+[A-Z][a-z'\-]+){1,2})\b",
+                             text):
+            words = [w.rstrip("'s").rstrip("'") for w in m.group(1).split()]
+            while words and words[0].lower() in self._VERBS:
+                words = words[1:]
+            if len(words) < 2 or any(w in months for w in words):
+                continue
+            name = " ".join(words)
+            if places.resolve_destination(name)[0] != "unknown" or name.lower() in places.CITIES:
+                continue
+            return name
+        return None
+
+    def _full_name_said(self, client) -> bool:
+        """Every real word of the client's name is in the advisor's words (P2-04)."""
+        if self.session.client_id and client.client_id == self.session.client_id:
+            return True
+        said = set(re.findall(r"[a-z]+", self._words()))
+        parts = [w for w in re.findall(r"[a-z]+", client.name.lower()) if len(w) > 1]
+        return all(p in said for p in parts)
+
+    def _confirm_client(self, client, question: str = "") -> ToolResponse:
+        """One-tap check: 'Is this for Jane Miller?' Yes / Another client / Cancel."""
+        self.seen.add(client.client_id)
+        bits = [client.name] + ([client.city] if getattr(client, "city", "") else []) + \
+               ([f"born {client.birth_year}"] if getattr(client, "birth_year", "") else [])
+        label = bits[0] + (f" ({', '.join(bits[1:])})" if len(bits) > 1 else "")
+        return self._ask("client_confirm", "Which client?", question or f"Is this for {label}?",
+                         [{"label": f"Yes, {client.name}", "value": client.client_id},
+                          {"label": "Another client", "value": "__another__"}])
+
+    def _ask_client(self) -> ToolResponse:
+        """
+        No client yet. P2-01: a name that matched nobody is said out loud.
+        P2-02: "she / his card" right after a request -> offer that client, one tap.
+        Otherwise the empty client field.
+        """
+        name = self._written_name()
+        if name:
+            return self._client_card(f"No client named {name} was found.")
+        last = self.services.clients.get(self.last_client) if self.last_client else None
+        if last and self._PRONOUN.search(self._words()) and \
+                self.services.entitlements.can(self.session.advisor_id, last.client_id, "view"):
+            return self._confirm_client(last)
+        return self._client_card()
+
     def _set_client(self, client_id: str) -> ToolResponse | None:
         self.task["picked"]["client_id"] = client_id
         self.seen.add(client_id)
+        self.last_client = client_id
         return self._permission_stop(client_id)
 
     def _client_answer(self, text: str) -> ToolResponse | None:
@@ -517,7 +580,7 @@ class GptConversation:
             if isinstance(found, ToolResponse):
                 return found
             if found is None:
-                return self._client_card()
+                return self._ask_client()
             stop = self._set_client(found)
             if stop:
                 return stop
@@ -541,7 +604,7 @@ class GptConversation:
 
     # ------------------------------------------------------------ the advisor's own words
     _REASON_WORDS = [
-        ("not received", r"never (?:arrived|came|got|received)|(?:didn'?t|did not|hasn'?t|has not|"
+        ("not received", r"never (?:\w+ )?(?:arrived|came|got|received|had)|(?:didn'?t|did not|hasn'?t|has not|"
                          r"haven'?t|have not) (?:arrive|arrived|come|get|got|receive|received)|"
                          r"not (?:arrived|received)|never got"),
         ("stolen", r"\bstol|\btheft|\bthief|pickpocket|\brobbed"),
@@ -905,6 +968,18 @@ class GptConversation:
         if field.startswith("dest:") and value == "__form__":   # P-02: "Somewhere else"
             self.task["picked"][field] = "__form__"
             return self._say(self._continue_form())
+        if field == "client_confirm":                        # P2-02 / P2-04
+            if value == "__another__":
+                return self._say(self._client_card())
+            client = self.services.clients.get(value)
+            if client is None or not self.services.entitlements.can(
+                    self.session.advisor_id, value, "view"):
+                return self._say(self._client_card())
+            stop = self._set_client(value)
+            if stop:
+                return self._say(stop)
+            self._note(f"the advisor confirmed the client {client.name}.")
+            return self._say(self._continue_form())
         if field == "cancel_kind":                           # "cancel the card": lock or close
             if value == "lock-card":
                 keep = {k: v for k, v in self.task["picked"].items()
@@ -930,6 +1005,7 @@ class GptConversation:
         if field in ("client_id", "card_id"):
             self.seen.add(value)
         if field == "client_id":                             # F-02: refuse right away
+            self.last_client = value
             stop = self._permission_stop(value)
             if stop:
                 return self._say(stop)
@@ -957,9 +1033,53 @@ class GptConversation:
         return self._advance()
 
     # ------------------------------------------------------------ addresses (autofill)
+    def _typed_address(self) -> str | None:
+        """An address the advisor wrote in this request ("Add 10 Downing St, London as ...")."""
+        text = " ".join(self.task["texts"]) if self.task else ""
+        m = re.search(r"\b(\d+[A-Za-z]?\s+[A-Za-z][^;!?\n]*?)(?=\s+(?:as|for|to)\s+(?:her|his|their|"
+                      r"the|[A-Z])|\s*[.;!?]?\s*$)", text)
+        if not m:
+            return None
+        addr = m.group(1).strip(" ,.")
+        words = addr.split()
+        if len(words) < 2 or len(addr) > 120 or words[1].lower().strip(",") in (
+                "for", "to", "as", "and", "card", "cards", "days", "day"):   # "2201 for ..."
+            return None
+        return addr
+
+    @staticmethod
+    def _outside_us(addr: str) -> bool:
+        """A country or well-known non-US city in the address, and no US state."""
+        parts = [p.strip() for p in addr.split(",")[1:] if p.strip()]
+        us = set(places.US_STATES) | set(places.US_TERRITORIES)
+        us_names = {v.lower() for v in list(places.US_STATES.values())
+                    + list(places.US_TERRITORIES.values())}
+        for p in parts:
+            if any(t in us for t in re.findall(r"\b[A-Z]{2}\b", p)) or \
+                    re.sub(r"[\d\-]+", " ", p).strip().lower() in us_names | {"usa", "us",
+                                                                          "united states"}:
+                return False
+        for p in parts:
+            low = re.sub(r"[\d\-]+", " ", p).strip().lower()
+            if low in places.BOTH:
+                continue
+            if low in places.CITIES and places.CITIES[low][0] in places.COUNTRIES:
+                return True
+            kind, value = places.resolve_destination(low)
+            if kind == "ok" and value in places.COUNTRIES:
+                return True
+        return False
+
     def _address_input(self, question: str, title: str = "New address") -> ToolResponse:
         panel = cards.address_input_card(title, question,
                                          [{"label": "Cancel", "value": "cancel"}])
+        typed = self._typed_address()                        # P2-05
+        if typed and self._outside_us(typed):
+            panel["notice"] = (f"{typed} is outside the US. Delivery addresses must be in the US "
+                               "or a US territory.")
+        elif typed:
+            panel["prefill"] = typed
+            panel["info"] = "Pick the address from the suggestions to confirm it."
         self.pending = {"kind": "address", "panel": panel}
         return ToolResponse(status="needs_input", message=cards.to_text(panel), card=panel)
 
@@ -1235,11 +1355,13 @@ class GptConversation:
             return {"clients": [{"client_id": c.client_id, "name": c.name,
                                  "account_last4": c.account_last4}]}, None
         if not self._named_in_request(args["query"]):
-            return None, self._client_card()
+            return None, self._ask_client()
         r = self._dispatch("find_client", args)
         if r.status == "error":
             self._note(f"find_client({args.get('query')!r}): no matching client.")
-            return {"error": r.message}, None
+            self.task["not_found"] = " ".join(w.capitalize() if w.islower() else w
+                                              for w in args["query"].split())   # P2-01
+            return None, self._ask_client()
         found = r.data["clients"]
         self.seen.update(c["client_id"] for c in found)
         if r.status == "needs_input":                       # several clients, or a near spelling
@@ -1251,6 +1373,9 @@ class GptConversation:
                            "clients; the advisor was asked to choose.")
                 return None, r
             found = [chosen]
+        client = self.services.clients.get(found[0]["client_id"])
+        if client and not self._full_name_said(client):      # P2-04: part of a name
+            return None, self._confirm_client(client)
         stop = self._set_client(found[0]["client_id"])       # F-02
         if stop:
             return None, stop
