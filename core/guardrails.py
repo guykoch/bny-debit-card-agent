@@ -9,16 +9,21 @@ model produces a request; this decides whether it happens.
     2. ownership     does the card actually belong to that client?
     3. confirmation  has the advisor approved the summary? (writes only)
     4. action        one call to the card system
-    5. audit         always, including refusals
+    5. audit         always, including refusals (every refusal is logged)
+
+Two more rules run alongside them:
+    - card state     already locked, closed, pending (handlers.state_check)
+    - volume limit   at most N closes/replacements/reports per advisor in a
+                     time window (settings.VOLUME_LIMITS)
 
 On entitlement
 --------------
 BNY's orchestrator checks entitlement before routing, and only sends us
-requests it has already approved. By default we trust that: step 1 is skipped
-and the audit records that the check was made upstream.
+requests it has already approved. We can trust that (step 1 skipped, the audit
+records that the check was made upstream) or check again ourselves.
 
-Set TRUST_UPSTREAM_ENTITLEMENT = False in config/settings.py to have step 1 run
-here as well. The one case where that matters is granularity — the upstream
+TRUST_UPSTREAM_ENTITLEMENT is now False in config/settings.py, so step 1 runs
+here as well (the demo has no BNY layer in front of it). The one case where that matters is granularity — the upstream
 check may be at client level while some of our actions differ in weight. An
 advisor cleared to lock a card is not necessarily cleared to close one
 permanently. Worth confirming with BNY; the flag exists so the answer is a
@@ -32,7 +37,7 @@ from __future__ import annotations
 
 from config import settings
 from core import audit, cards, schemas
-from core.errors import AgentError, BadRequest, NotEntitled
+from core.errors import AgentError, BadRequest, NotEntitled, NotPossible
 from core.handlers import ACTIONS
 from core.models import Session, ToolResponse
 
@@ -46,11 +51,80 @@ def dispatch(services, session: Session, tool_name: str,
             return _write(services, session, tool_name, tool_input, confirmed)
         return _read(services, session, tool_name, tool_input)
     except AgentError as e:
+        if schemas.load().get(tool_name, {}).get("access") == "write" or e.code == "not_entitled":
+            log_refusal(session, tool_name, tool_input, e)
         return ToolResponse(status="error", message=e.message,
                             data={"code": e.code})
 
 
+def log_refusal(session, tool_name, tool_input, error: AgentError) -> None:
+    """F-07: every refusal is in the audit, not only completed actions."""
+    ti = tool_input if isinstance(tool_input, dict) else {}
+    audit.write(session, tool_name, ti.get("client_id"), ti.get("card_id"),
+                outcome="not_entitled" if error.code == "not_entitled" else "refused",
+                model_interpretation=ti or None,
+                detail={"code": error.code, "message": error.message,
+                        "entitlement_checked_by": _checked_by()})
+
+
+def _checked_by() -> str:
+    return "bny_orchestrator" if settings.TRUST_UPSTREAM_ENTITLEMENT else "agent"
+
+
+# ---------------------------------------------------------------- early checks
+# The chat calls these as soon as it knows the client / the card, so a request
+# that can never go through is refused before any follow-up question. They are
+# the same checks _write() runs again at the panel and at Confirm.
+
+def check_permission(services, session, client_id: str, tool_name: str) -> None:
+    """Raises NotEntitled (and logs it) when this advisor may not do this action."""
+    if settings.TRUST_UPSTREAM_ENTITLEMENT:
+        return
+    if not services.entitlements.can(session.advisor_id, client_id, tool_name):
+        e = NotEntitled()
+        log_refusal(session, tool_name, {"client_id": client_id}, e)
+        raise e
+
+
+def check_card_state(services, session, tool_name: str, card) -> None:
+    """Raises NotPossible (and logs it) when the card's state rules this action out."""
+    spec = ACTIONS.get(tool_name)
+    if spec and spec.state_check:
+        try:
+            spec.state_check(card)
+        except AgentError as e:
+            log_refusal(session, tool_name,
+                        {"client_id": card.client_id, "card_id": card.card_id}, e)
+            raise
+
+
+def _check_volume(session, tool_name: str) -> None:
+    limit = settings.VOLUME_LIMITS.get(tool_name)
+    if not limit:
+        return
+    done = audit.recent_count(session.advisor_id, tool_name, settings.VOLUME_WINDOW_MINUTES)
+    if done >= limit:
+        verb = {"close_card": "closed", "replace_card": "replaced",
+                "report_lost_stolen": "reported lost or stolen"}.get(tool_name, "changed")
+        raise NotPossible(
+            "volume_limit",
+            f"You have {verb} {done} cards in the last {settings.VOLUME_WINDOW_MINUTES} "
+            "minutes. For safety, further requests of this kind are paused for now. "
+            "Please try again later or contact operations.")
+
+
 # ---------------------------------------------------------------- read path
+
+def _client_label(c) -> str:
+    """F-23: city and birth year tell similar names apart."""
+    bits = [c.name]
+    if getattr(c, "city", ""):
+        bits.append(c.city)
+    if getattr(c, "birth_year", ""):
+        bits.append(f"born {c.birth_year}")
+    bits.append(f"acct ...{c.account_last4}")
+    return " · ".join(bits)
+
 
 def _read(services, session, tool_name, ti) -> ToolResponse:
     """
@@ -60,20 +134,32 @@ def _read(services, session, tool_name, ti) -> ToolResponse:
     """
     if tool_name == "find_client":
         matches = services.clients.find(ti["query"], session.advisor_id)
+        similar = False
+        if not matches:
+            # F-24: close spellings, still limited to this advisor's clients
+            finder = getattr(services.clients, "find_similar", None)
+            matches = finder(ti["query"], session.advisor_id) if finder else []
+            similar = bool(matches)
         if not matches:
             return ToolResponse(status="error", message="No matching client found.",
                                 data={"code": "no_match"})
-        if len(matches) == 1:
+        if len(matches) == 1 and not similar:
             c = matches[0]
             return ToolResponse(status="ok", message=f"{c.name}, account ...{c.account_last4}",
                                 data={"clients": [c.__dict__]})
-        card = cards.choice_card(
-            "Which client?",
-            f"{len(matches)} clients match that name.",
-            [{"label": f"{c.name} - acct ...{c.account_last4}", "value": c.client_id}
-             for c in matches])
+        if similar:
+            title = "Did you mean?"
+            question = (f"No client is named exactly '{ti['query']}'. "
+                        + ("Did you mean this client?" if len(matches) == 1
+                           else "Did you mean one of these?"))
+        else:
+            title, question = "Which client?", f"{len(matches)} clients match that name."
+        card = cards.choice_card(title, question,
+                                 [{"label": _client_label(c), "value": c.client_id}
+                                  for c in matches])
         return ToolResponse(status="needs_input", message=cards.to_text(card),
-                            card=card, data={"clients": [c.__dict__ for c in matches]})
+                            card=card, data={"clients": [c.__dict__ for c in matches],
+                                             "similar": similar})
 
     if tool_name == "list_cards":
         client_id = ti["client_id"]
@@ -95,15 +181,10 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     client_id, card_id = ti["client_id"], ti["card_id"]
 
     # 1. entitlement
-    # Trusted upstream by default: BNY only routes requests it has approved.
-    # The flag is in config/settings.py; the audit records which side checked.
-    checked_by = "bny_orchestrator"
+    # The audit records which side checked (setting in config/settings.py).
+    checked_by = _checked_by()
     if not settings.TRUST_UPSTREAM_ENTITLEMENT:
-        checked_by = "agent"
         if not services.entitlements.can(session.advisor_id, client_id, tool_name):
-            audit.write(session, tool_name, client_id, card_id, outcome="not_entitled",
-                        model_interpretation=ti,
-                        detail={"entitlement_checked_by": checked_by})
             raise NotEntitled()
 
     # 2. ownership
@@ -111,15 +192,24 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     if card is None or card.client_id != client_id:
         raise BadRequest("That card does not belong to this client.")
 
-    # state rules for this action (already locked, closed, bad dates, ...)
+    # state rules for this action (already locked, closed, pending, ...)
+    if spec.state_check:
+        spec.state_check(card)
+    # rules for the filled-in values (dates, destinations, delivery address, ...)
     if spec.precheck:
-        spec.precheck(ti, card)
+        spec.precheck(ti, card, services)
+    # unusual volume (runs at the panel and again at Confirm)
+    _check_volume(session, tool_name)
 
     # 3. confirmation
     if not confirmed:
         fields, warning = spec.summary(ti, card)
         card_payload = cards.confirm_card(spec.title, fields, warning, spec.confirm_label,
                                           extra_actions=spec.extra_actions, danger=spec.danger)
+        if tool_name == "travel_notice":
+            # lets the chat's date picker start from the dates shown
+            card_payload["dates"] = {"start": ti["start_date"], "end": ti["end_date"],
+                                     "max_days": settings.MAX_TRAVEL_DAYS}
         return ToolResponse(status="awaiting_confirmation",
                             message=cards.to_text(card_payload),
                             card=card_payload,

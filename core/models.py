@@ -32,6 +32,17 @@ class Client:
     client_id: str
     name: str
     account_last4: str
+    city: str = ""                   # shown in "Which client?" to tell similar names apart
+    birth_year: str = ""
+
+
+@dataclass
+class Address:
+    """One address in the client's profile. Replacements may only go to these."""
+    label: str                       # "Home", "Vacation home", ...
+    address: str
+    state: str = ""                  # two-letter US state / territory code
+    country: str = "US"
 
 
 @dataclass

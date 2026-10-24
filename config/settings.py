@@ -48,11 +48,34 @@ MODE = os.environ.get("DCA_MODE", "mock")      # "mock" or "bny"
 #     were told
 # Either way the audit records which side did the checking, so the record is
 # never silent about it.
-TRUST_UPSTREAM_ENTITLEMENT = True
+TRUST_UPSTREAM_ENTITLEMENT = False            # F-01: we check permissions ourselves too
 
-# Safety limits. Deliberately conservative; agree the real numbers with BNY.
-MAX_TRAVEL_DAYS = 90
+# How permissions are read (decision D-01, still open with Ben):
+#   "per_action"      each advisor-client pair lists the actions allowed
+#                     (entitlements.csv), e.g. lock but not close
+#   "all_or_nothing"  any row for the pair gives every card action; no row, nothing
+# Ben described access as all or nothing; switch here if he confirms it.
+PERMISSION_MODEL = os.environ.get("DCA_PERMISSION_MODEL", "per_action")
+
+# Safety limits. Agree the real numbers with BNY.
+MAX_TRAVEL_DAYS = 14                           # per Ben: travel notices max out at 2 weeks
+MAX_TRAVEL_DESTINATIONS = 10                   # per Ben: up to 10 destinations per notice
 CONFIRM_REQUIRED_FOR_WRITES = True             # never set False in production
+
+# Replacement delivery (decision D-02): only to an address listed in the client's
+# profile, and only in a US state, DC or US territory. A new address must first be
+# added to the profile in NetX360. PO boxes: still to confirm with Ben.
+REPLACEMENT_ALLOW_PO_BOX = True
+
+# Pending cards (issued, not yet activated) - decision D-03, still open with Ben.
+# Default: lock it, or order a replacement (e.g. it never arrived). Everything
+# else is refused with a clear message.
+PENDING_CARD_ACTIONS = {"lock_card", "replace_card"}
+
+# Unusual volume (decision D-06, team default): at most this many completed
+# actions of one kind per advisor in the time window. Agree real numbers with BNY.
+VOLUME_LIMITS = {"close_card": 3, "replace_card": 5, "report_lost_stolen": 5}
+VOLUME_WINDOW_MINUTES = 10
 
 
 # ---------------------------------------------------------------- the AI layer

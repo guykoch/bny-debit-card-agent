@@ -18,7 +18,8 @@
         "items": {
           "type": "string"
         },
-        "description": "One or more countries or US states. Resolve ambiguous names with the advisor first."
+        "description": "One to ten countries or US states, exactly as named on BNY's list (e.g. \"France\", \"Texas\", \"Georgia (country)\"). Cities are not accepted; ask which country or state. Ambiguous names are resolved by the system with buttons.",
+        "maxItems": 10
       },
       "start_date": {
         "type": "string",
@@ -28,7 +29,7 @@
       "end_date": {
         "type": "string",
         "format": "date",
-        "description": "YYYY-MM-DD. Must be on or after start_date."
+        "description": "YYYY-MM-DD. Must be on or after start_date; a notice covers at most 14 days."
       }
     },
     "required": [

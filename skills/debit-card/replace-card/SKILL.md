@@ -3,29 +3,38 @@ name: replace-card
 tool: replace_card
 lookups: find_client, list_cards
 priority: 70
-triggers: replace, new card, reissue, damaged, broken, cracked, worn out
+triggers: replace, new card, reissue, damaged, broken, cracked, worn out, never arrived, never received, not arrived, hasn't arrived
 description: Cancel the current card and issue a replacement.
 ---
 
 # Replace card
 
-Cancels the current card and issues a new one.
+Cancels the current card and issues a new one. A closed card can be replaced
+too - that is how the client gets a working card again.
 
 **Required:** `client_id`, `card_id`, `reason`, `delivery_address`
-**`reason` must be one of:** `damaged`, `lost`, `stolen`, `expiring`, `other`
+**`reason` must be one of:** `damaged`, `lost`, `stolen`, `expiring`,
+`not received`, `other`
+**Optional:** `flag_transactions` (only when the reason is lost or stolen)
 
 ## Rules of its own
 
-- Ask for the reason if the advisor has not given one. **Do not infer it.**
-- Default the delivery address to the one on file, but **show it and ask the
-  advisor to confirm or change it.** Never send to an address the advisor
-  mentioned in passing without confirming it.
-- If the reason is `lost` or `stolen`, ask whether they also want the account
-  flagged — that is **report-lost-stolen**, and it should usually run first.
+- **Reason and delivery address are asked by the system with buttons.** Fill
+  `reason` only if the advisor already said it ("it's cracked" = damaged, "she
+  never got it" = not received). Otherwise leave it out and call the tool.
+- **Delivery address:** a replacement can only go to an address that is in the
+  client's profile, in a US state or US territory. The system shows the
+  client's addresses as buttons. Fill `delivery_address` only when the advisor
+  typed a specific address; the system checks it against the profile. A new
+  address must first be added to the client's profile in NetX360 - this chat
+  does not change profile addresses.
+- If the reason is `lost` or `stolen`, the system also asks whether there are
+  transactions the client does not recognise. Never ask this for any other
+  reason.
 
 ## Example
 
 > Advisor: Jane's card is cracked, send her a new one
-> → resolve client and card → reason = damaged
-> → "Deliver to 14 Hudson St, New York, NY 10013 — the address on file?"
-> → confirm → replace_card
+> → resolve client and card → reason = damaged → replace_card
+> → system: "Send the new card to which address? Home: 14 Hudson St..." (buttons)
+> → panel → confirm

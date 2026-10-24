@@ -24,14 +24,18 @@ Track which required fields are still empty and ask only for those.
 - **Never submit a date you inferred without showing it first.** Either ask,
   or let the confirmation panel show it: the panel lists the dates and offers
   "Change dates", and nothing runs until the advisor confirms.
-- If the end date is before the start date, or the range is longer than 90
-  days, say so and ask.
+- A notice covers at most **14 days** (both days counted). If the end date is
+  before the start date, or the trip is longer, say so and ask. The panel's
+  "Change dates" opens a calendar.
 
 ## Destination
 
-- If a place name is ambiguous, **ask**. Do not pick the more common reading.
-  "Georgia" → the US state or the country? "Springfield" → which one?
-- Multiple countries are allowed. List them back before confirming.
+- Destinations are **countries or US states** from BNY's list, **up to 10** per
+  notice. Write them as named on the list ("France", "Texas", "Georgia (country)").
+- A city is not a destination: if the advisor names one ("Paris"), ask which
+  country or US state it is in. **Never guess.**
+- If a name could be two places ("Georgia"), pass it as the advisor wrote it;
+  the system asks with buttons and shows the choice on the panel.
 
 ## Never
 
@@ -41,6 +45,6 @@ Never fill a required travel field with a default.
 
 > Advisor: Sarah's off to Georgia next month for a couple of weeks
 > → resolve client → resolve card
-> → "Georgia the country, or the US state?"
+> → system buttons: "Georgia (country)" / "Georgia (US state)"
 > → propose the 1st to the 15th of next month
 > → travel_notice → the panel shows the dates, with Change dates → confirm

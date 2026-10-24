@@ -88,7 +88,7 @@ def fresh(model, advisor="ADV-1234"):
 def run():
     audit.reset()
     start = date.today() + timedelta(days=25)
-    end = start + timedelta(days=14)
+    end = start + timedelta(days=13)
 
     print("\n1. Out-of-scope messages get the fixed reply")
     m = ScriptedModel(route("none"))
@@ -149,7 +149,7 @@ def run():
           "not available" in m.requests[-1]["messages"][-1]["content"])
     check("the model only sees its own action tool",
           {t["function"]["name"] for t in m.requests[1]["tools"]}
-          == {"lock_card", "find_client", "list_cards", "present_options"})
+          == {"lock_card", "find_client", "list_cards", "present_options", "switch_action"})
 
     print("\n6. Model-offered options, then a switch of skill")
     m = ScriptedModel(route("close-card"),
@@ -195,31 +195,44 @@ def run():
     r = conv.send("confirm")
     check("travel notice added", r.status == "ok" and len(svc.cards.travel_notices) == 1)
 
-    print("\n8. A refusal from the guardrail goes back to the model to explain")
+    print("\n8. Card state is checked by code as soon as the card is known (F-17)")
     m = ScriptedModel(route("lock-card"),
                       call("find_client", query="Sarah Chen 4409"),
-                      call("list_cards", client_id="C-44090"),
-                      call("lock_card", client_id="C-44090", card_id="CARD-9902"),
-                      say("That card is already locked."))
+                      call("list_cards", client_id="C-44090"))
     _, conv = fresh(m)
     r = conv.send("Lock Sarah Chen's card, account 4409")
     lookup = json.loads(m.requests[2]["messages"][-1]["content"])
     check("account last four picks the right Sarah Chen, no question",
           [c["client_id"] for c in lookup["clients"]] == ["C-44090"])
-    check("already_locked explained", r.message == "That card is already locked.")
-    check("the refusal reached the model",
-          "already_locked" in m.requests[-1]["messages"][-1]["content"])
+    check("'already locked' from code, not 'no card found'",
+          r.message == "Card ...9902 is already locked." and r.data.get("code") == "already_locked")
+    check("no further model call", len(m.requests) == 3)
+    check("refusal is in the audit (F-07)", audit.LOG[-1]["outcome"] == "refused")
 
-    print("\n9. Lost or stolen: the follow-up is fixed text from code")
+    print("\n9. Lost or stolen: buttons from code, then Yes/No follow-up (F-20, F-25)")
     m = ScriptedModel(route("report-lost-stolen"),
                       call("find_client", query="Jane Miller"),
                       call("list_cards", client_id="C-88210"),
-                      call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417",
-                           incident_type="lost"))
+                      call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
     _, conv = fresh(m)
-    conv.send("Jane Miller lost her wallet, it was lost not stolen")
+    r = conv.send("Jane Miller lost her wallet")
+    check("lost or stolen asked with buttons",
+          r.card["kind"] == "choice" and [a["value"] for a in r.card["actions"]] == ["lost", "stolen"])
+    m.add(call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
+    r = conv.send("lost")
+    check("then unrecognised transactions, Yes / No",
+          [a["label"] for a in r.card["actions"]] == ["Yes", "No"])
+    m.add(call("report_lost_stolen", client_id="C-88210", card_id="CARD-4417"))
+    r = conv.send("No")
+    check("panel with the chosen values", r.status == "awaiting_confirmation"
+          and r.data["input"]["incident_type"] == "lost"
+          and r.data["input"]["flag_transactions"] is False)
     r = conv.send("confirm")
     check("offers a replacement", r.card.get("follow_up", "").startswith("Would you like"))
+    check("with Yes / No buttons", [a["value"] for a in r.card["follow_up_actions"]]
+          == ["Yes, order a replacement", "__no__"])
+    r = conv.send("__no__")
+    check("No: nothing else changed, no model call", r.message.startswith("OK."))
 
     print("\n10. Another advisor's client does not exist for this advisor")
     m = ScriptedModel(route("lock-card"), call("find_client", query="Jane Miller"),

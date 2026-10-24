@@ -96,6 +96,14 @@
   button.b:disabled { cursor: default; opacity: .55; }
   button.b.opt.picked:disabled, button.b.chosen:disabled { opacity: 1; }
   .hint { font-size: 11.5px; color: var(--hint); font-style: italic; }
+  .dates { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .dates .dq { font-weight: 600; color: var(--head); font-size: 13px; margin-bottom: 8px; }
+  .dates .row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .dates label { display: flex; flex-direction: column; font-size: 12px; color: var(--hint); gap: 3px; }
+  .dates input { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); background: var(--white); }
+  .dates .dh { font-size: 11.5px; color: var(--hint); margin-bottom: 8px; }
+  .dates .dh.err { color: var(--red); }
   .done { display: flex; gap: 8px; align-items: flex-start; color: var(--green); font-weight: 600; }
   .done svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
   .err { color: var(--red); }
@@ -215,6 +223,43 @@ function renderChoice(card) {
   return c;
 }
 
+// F-22: Change dates opens a date-range picker inside the panel. Past dates are
+// disabled and the end date can be at most max_days after the start (counting
+// both days). The server checks the same rules again.
+function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function addDays(iso, n) { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); }
+function niceDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+
+function datePicker(cardEl, d) {
+  const old = cardEl.querySelector(".dates");
+  if (old) { old.remove(); return; }
+  const max = d.max_days || 14, today = isoLocal(new Date());
+  const box = el("div", "dates",
+    `<div class="dq">Pick the travel dates</div>
+     <div class="row2"><label>From<input type="date" class="ds"></label><label>To<input type="date" class="de"></label></div>
+     <div class="dh">Up to ${max} days, no past dates.</div>`);
+  const s = box.querySelector(".ds"), e = box.querySelector(".de"), h = box.querySelector(".dh");
+  s.min = today; s.value = d.start && d.start >= today ? d.start : today;
+  function sync() {
+    if (!s.value || s.value < today) s.value = today;
+    e.min = s.value; e.max = addDays(s.value, max - 1);
+    if (!e.value || e.value < e.min) e.value = d.end && d.end >= e.min && d.end <= e.max ? d.end : e.min;
+    if (e.value > e.max) e.value = e.max;
+    h.className = "dh"; h.textContent = `Up to ${max} days, no past dates.`;
+  }
+  s.onchange = sync; e.onchange = sync; sync();
+  const use = el("button", "b primary", "Use these dates");
+  use.onclick = () => {
+    if (busy) return;
+    if (!s.value || !e.value || e.value < s.value) { h.className = "dh err"; h.textContent = "Pick a start and an end date."; return; }
+    lockCard(cardEl, use);
+    send(`set_dates:${s.value}:${e.value}`, `New dates: ${niceDate(s.value)} to ${niceDate(e.value)}`);
+  };
+  box.appendChild(use);
+  cardEl.appendChild(box);
+  box.scrollIntoView({ block: "nearest" });
+}
+
 function renderConfirm(card) {
   const c = el("div", "card" + (card.danger ? " danger" : ""));
   c.appendChild(el("h4", null, esc(card.title)));
@@ -226,7 +271,8 @@ function renderConfirm(card) {
   (card.actions || []).forEach(a => {
     const cls = a.style === "primary" ? "primary" : a.style === "alternative" ? "alt" : "";
     const btn = el("button", "b " + cls, esc(a.label));
-    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    if (a.value === "change_dates" && card.dates) btn.onclick = () => { if (!busy) datePicker(c, card.dates); };
+    else btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
     btns.appendChild(btn);
   });
   btns.appendChild(el("span", "hint", "nothing has run yet"));
@@ -246,7 +292,9 @@ function renderReply(r) {
   if (card && card.kind === "result") {
     const main = (r.message || "").split("\n")[0];
     addBot(el("div", "done", ICONS.check + `<span>${esc(main)}</span>`), !card.follow_up);
-    if (card.follow_up) addBot(card.follow_up);
+    if (card.follow_up && card.follow_up_actions) {        // F-25: Yes / No buttons
+      addBot(renderChoice({ message: card.follow_up, actions: card.follow_up_actions }), false);
+    } else if (card.follow_up) addBot(card.follow_up);
     return;
   }
   addBot(r.message || "");
@@ -258,9 +306,15 @@ function typing(on) {
   if (!on && t) t.remove();
 }
 
+// F-09: once the advisor moves on, earlier panels can no longer be clicked.
+function retireOldPanels() {
+  msgs.querySelectorAll(".card button:not(:disabled), .card input:not(:disabled)").forEach(b => b.disabled = true);
+}
+
 async function send(utterance, display) {
   if (busy || !utterance.trim()) return;
   busy = true; sendBtn.disabled = true;
+  retireOldPanels();
   addUser(display ?? utterance);
   typing(true);
   try {

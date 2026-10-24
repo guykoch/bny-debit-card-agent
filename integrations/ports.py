@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
-from core.models import Card, Client
+from core.models import Address, Card, Client
 
 
 class ClientDirectory(Protocol):
@@ -29,6 +29,14 @@ class ClientDirectory(Protocol):
         ...
 
     def get(self, client_id: str) -> Optional[Client]:
+        ...
+
+    def find_similar(self, query: str, advisor_id: str) -> list[Client]:
+        """Close spellings ("Castellanos" for "Castellano"), same visibility rule as find()."""
+        ...
+
+    def addresses(self, client_id: str) -> list[Address]:
+        """Every address in the client's profile. Replacements may only go to one of these."""
         ...
 
 

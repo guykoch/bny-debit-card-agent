@@ -15,9 +15,8 @@ Removes a temporary lock.
 
 ## Rules of its own
 
-- If the card was closed rather than locked, say it cannot be unlocked and that
-  a replacement would be needed.
-- If the card is already active, say so rather than calling the tool.
+- Only locked cards can be unlocked. If the client has no locked card, or the
+  card is closed or pending, the system says so as soon as the card is known.
 
 ## Example
 

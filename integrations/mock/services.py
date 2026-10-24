@@ -10,9 +10,11 @@ updating; restarting resets everything to what the CSVs say.
 from __future__ import annotations
 
 import copy
+import difflib
 from typing import Optional
 
-from core.models import Card, Client
+from config import settings
+from core.models import Address, Card, Client
 from integrations.mock import dataset as data
 
 
@@ -34,10 +36,41 @@ class MockClientDirectory:
     def get(self, client_id: str) -> Optional[Client]:
         return next((c for c in self._clients if c.client_id == client_id), None)
 
+    def find_similar(self, query: str, advisor_id: str) -> list[Client]:
+        """
+        Close spellings, e.g. "Robert Castellanos" -> Robert Castellano. Every word of
+        the query must closely match a word of the name. Same visibility rule as
+        find(): clients this advisor cannot see are never suggested.
+        """
+        tokens = [t for t in query.lower().replace(".", " ").split() if t]
+        if not tokens:
+            return []
+
+        def close(token, words):
+            return any(w.startswith(token) or difflib.SequenceMatcher(None, token, w).ratio() >= 0.8
+                       for w in words)
+
+        out = []
+        for c in self._clients:
+            words = c.name.lower().replace(".", " ").replace("-", " ").split()
+            words += [c.name.lower()]
+            if all(close(t, words) for t in tokens) and \
+                    self._entitlements.can(advisor_id, c.client_id, "view"):
+                out.append(c)
+        return out
+
+    def addresses(self, client_id: str) -> list[Address]:
+        return [Address(**a) for a in data.ADDRESSES.get(client_id, [])]
+
 
 class MockEntitlementService:
     def can(self, advisor_id: str, client_id: str, action: str) -> bool:
-        return action in data.GRANTS.get(advisor_id, {}).get(client_id, set())
+        granted = data.GRANTS.get(advisor_id, {}).get(client_id)
+        if granted is None:
+            return False                       # no row: the client does not exist for them
+        if settings.PERMISSION_MODEL == "all_or_nothing":
+            return True                        # D-01 option: any access means full access
+        return action in granted
 
 
 class MockCardSystem:
@@ -65,7 +98,8 @@ class MockCardSystem:
         return {"status": "active",
                 "message": f"Card ending {self._cards[card_id].card_last4} is unlocked."}
 
-    def replace(self, card_id, advisor_id, reason, delivery_address) -> dict:
+    def replace(self, card_id, advisor_id, reason, delivery_address,
+                flag_transactions=False) -> dict:
         old = self._cards[card_id]
         old.status = "closed"
         new_id = f"CARD-{(abs(hash(card_id)) % 9000) + 1000}"
@@ -73,8 +107,11 @@ class MockCardSystem:
             card_id=new_id, client_id=old.client_id, client_name=old.client_name,
             card_last4=new_id[-4:], account_last4=old.account_last4,
             status="pending", address_on_file=delivery_address)
+        if flag_transactions:
+            self.flagged.append({"card_id": card_id, "advisor_id": advisor_id})
+        extra = " Recent transactions flagged for review." if flag_transactions else ""
         return {"status": "replacement_ordered", "new_card_id": new_id,
-                "message": f"Replacement ordered, delivering to {delivery_address}."}
+                "message": f"Replacement ordered, delivering to {delivery_address}.{extra}"}
 
     def close(self, card_id, advisor_id, reason) -> dict:
         self._cards[card_id].status = "closed"

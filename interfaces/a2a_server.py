@@ -56,6 +56,7 @@ def services():
             from integrations.convex_store.client import ConvexClient
             client = ConvexClient()
             audit.add_sink(lambda row: client.mutation("addAudit", row=row))
+            audit.set_reader(lambda: client.query("listAudit"))
     return _SERVICES
 
 
@@ -117,7 +118,8 @@ def info() -> dict:
             "advisors": sorted(dataset.GRANTS), "default_advisor": "ADV-1234",
             # demo-only switches (see demo_tools/)
             "demo_mode": settings.DEMO_MODE,
-            "passcode_required": bool(settings.DEMO_PASSCODE)}
+            "passcode_required": bool(settings.DEMO_PASSCODE),
+            "max_travel_days": settings.MAX_TRAVEL_DAYS}
 
 
 def list_audit() -> list:

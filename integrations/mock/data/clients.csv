@@ -1,21 +1,21 @@
-client_id,name,account_last4
-C-88210,Jane Miller,8821
-C-44090,Sarah Chen,4409
-C-44091,Sarah M. Chen,4410
-C-99001,Sarah Chen,9900
-C-77310,David Okafor,7731
-C-10220,Robert Castellano,1022
-C-10344,Priya Raghunathan,1034
-C-11580,Margaret Osei-Bonsu,1158
-C-12090,Thomas Whitfield,1209
-C-12771,Elena Vasquez,1277
-C-13402,Hiroshi Tanaka,1340
-C-14118,Amara Nwosu,1411
-C-15003,Daniel Rosenfeld,1500
-C-15644,Claire Beaumont,1564
-C-16210,Michael Donnelly,1621
-C-16877,Fatima Al-Rashid,1687
-C-17309,Gregory Lindqvist,1730
-C-18022,Yolanda Martinez,1802
-C-18450,Peter Olawale,1845
-C-19006,Anne-Marie Dubois,1900
+client_id,name,account_last4,city,birth_year
+C-88210,Jane Miller,8821,New York,1979
+C-44090,Sarah Chen,4409,Boston,1987
+C-44091,Sarah M. Chen,4410,Chicago,1995
+C-99001,Sarah Chen,9900,Seattle,1972
+C-77310,David Okafor,7731,San Francisco,1983
+C-10220,Robert Castellano,1022,Greenwich,1961
+C-10344,Priya Raghunathan,1034,Chicago,1990
+C-11580,Margaret Osei-Bonsu,1158,Short Hills,1958
+C-12090,Thomas Whitfield,1209,Wellesley,1966
+C-12771,Elena Vasquez,1277,Miami,1988
+C-13402,Hiroshi Tanaka,1340,San Francisco,1975
+C-14118,Amara Nwosu,1411,Atlanta,1992
+C-15003,Daniel Rosenfeld,1500,Scarsdale,1969
+C-15644,Claire Beaumont,1564,Montreal,1985
+C-16210,Michael Donnelly,1621,Boston,1977
+C-16877,Fatima Al-Rashid,1687,Houston,1981
+C-17309,Gregory Lindqvist,1730,Minneapolis,1964
+C-18022,Yolanda Martinez,1802,San Diego,1993
+C-18450,Peter Olawale,1845,Philadelphia,1971
+C-19006,Anne-Marie Dubois,1900,Darien,1960

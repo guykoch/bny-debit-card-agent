@@ -17,7 +17,7 @@
 >
 > **First actions in the new chat:**
 > 1. Unzip `debit-card-agent.zip` and run the four test suites and the demo (section 5.9).
->    Expect 22 + 39 + 18 + 36 + 20 passing (add `test_hosting`). None needs an API key
+>    Expect 23 + 39 + 18 + 42 + 20 + 57 passing (`test_guardrails`, `test_skills`, `test_choices`, `test_llm_runtime`, `test_hosting`, `test_fixes`). None needs an API key
 >    or network.
 > 2. Read the code you are about to change before changing it. The descriptions here
 >    are accurate as of today, but the files are the truth.
@@ -765,6 +765,29 @@ mock data, four read-only tools, `agent/state.py`, `agent/runner.py`,
 tests, docs, examples, assumptions and build order. Guy will say when to implement it;
 until then `agent/` stays README-only. Three decisions are open (plan §1).
 
+## 9b. Fixes from team testing (October 2026)
+
+Team testing (Julia, Esra, Guy) and Ben's meeting notes produced 25 fixes,
+tracked in `Agent_Fix_Tracker.xlsx` (Fixes, Decide & Next, Tests sheets). All 25
+are built; see `FIXES.md` for where each lives and `tests/test_fixes.py` (57
+checks, by tracker test ID). Key changes:
+- Permissions are checked by our code (`TRUST_UPSTREAM_ENTITLEMENT = False`) and
+  refused as soon as the client is known. `PERMISSION_MODEL` switches to
+  all-or-nothing if Ben confirms (D-01 open).
+- Replacements go only to an address in the client's profile
+  (`integrations/mock/data/addresses.csv`), US states and territories only (D-02,
+  decided by Guy). PO boxes allowed by a setting until Ben confirms.
+- Travel notices: destinations from `core/places.py` (countries + US states, up
+  to 10), max 14 days. Change dates opens a date picker; new dates are applied by
+  code (`set_dates:` message), no model call.
+- Pending cards: lock or replace only, by setting (D-03 open). Volume limit per
+  advisor (D-06 team default). Every refusal is audited.
+- Code-built buttons for reason, lost/stolen, unrecognised transactions,
+  delivery address and ambiguous places; card-state answers from code; PIN
+  requests get a fixed reply; `switch_action` replaces "I'll do that instead";
+  "Did you mean?" for near spellings; city and birth year in "Which client?".
+- No change in `convex-demo-db/`; a push redeploys Vercel.
+
 ## 10. Known gaps and inconsistencies (verified against the code — fix only when asked)
 
 ### 10.1 The keyword stand-in (no-key fallback only) still breaks some skill rules
@@ -773,13 +796,14 @@ Only matters if the demo runs without a key. In `interfaces/local_runtime.py` `_
 - `report_lost_stolen` incident_type defaults to `"lost"` unless "stolen/stole" appears.
 - `close_card` reason defaults to `"advisor request"`; "cancel the card" never asks lock or close.
 - Travel: "What are the travel dates?" is asked without saving pending state (answer lost);
-  "next month" = today + 30 days; Change dates only replies that it needs GPT-5.4.
+  "next month" = today + 30 days. The calendar's new dates now work here too.
 - Keyword routing misroutes "I'm going to need you to lock…" to travel notice.
 GPT-5.4 mode does not use any of this.
 
 ### 10.2 GPT-5.4 mode — what is not guaranteed, and what is untested
-- Asking the right questions (Georgia, lock or close, lost or stolen, reason, address) and
-  choosing the right skill depend on GPT-5.4 following the prompts (§4.7). Before showing BNY,
+- Georgia, lost or stolen, reason, unrecognised transactions and the delivery address are now
+  asked by code with buttons (F-20). Lock-or-close and choosing the right skill still depend
+  on GPT-5.4 following the prompts (§4.7). Before showing BNY,
   run a set of test sentences live and adjust the skill files or `runtime_notes()`.
 - Never run against the live OpenAI API from the build environment; the first live run is on
   Guy's machine. If OpenAI rejects a parameter (e.g. `reasoning_effort`), set
@@ -791,10 +815,9 @@ GPT-5.4 mode does not use any of this.
 
 ### 10.3 Audit does not fully match what the docs and slides claim
 - **Fixed:** `advisor_typed` now records the original request in both runtimes.
-- Still true: only **entitlement refusals (flag off)** are audited. Precheck refusals
-  (`already_locked`, `card_closed`, bad dates), ownership `bad_request`, schema rejections,
-  `no_match`, and **cancellations** are not written, yet `audit.py`, the README, the check-in
-  deck and the Agent Logic slide say "every refusal" is logged.
+- **Fixed (F-07):** every refusal of a write (permission, ownership, card state, dates,
+  destinations, address, schema, volume) is now audited with outcome `refused` or
+  `not_entitled`. Still not written: `no_match` searches and cancellations.
 
 ### 10.4 Other stale or inaccurate text
 - `core/cards.py` / `models.py` / `a2a_agent_card.json` call the payload "A2UI"; it is A2UI-inspired, not real A2UI messages (§4.6).

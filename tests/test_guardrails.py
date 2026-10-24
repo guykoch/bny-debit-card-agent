@@ -53,13 +53,18 @@ def run():
     check("the third Sarah Chen is invisible",
           all(c["client_id"] != "C-99001" for c in r.data["clients"]))
 
-    print("\n4. Entitlement — trusting BNY's upstream check (the default)")
-    check("flag is on by default", settings.TRUST_UPSTREAM_ENTITLEMENT)
-    r = dispatch(svc, adv, "unlock_card", {"client_id": "C-12090", "card_id": "CARD-2091"},
-                 confirmed=True)
-    check("an approved request goes straight through", r.status == "ok", r.message)
-    check("audit says who checked",
-          audit.LOG[-1]["detail"].get("entitlement_checked_by") == "bny_orchestrator")
+    print("\n4. Entitlement — trusting BNY's upstream check (setting on)")
+    check("we check permissions ourselves by default (F-01)",
+          not settings.TRUST_UPSTREAM_ENTITLEMENT)
+    settings.TRUST_UPSTREAM_ENTITLEMENT = True
+    try:
+        r = dispatch(svc, adv, "unlock_card", {"client_id": "C-12090", "card_id": "CARD-2091"},
+                     confirmed=True)
+        check("an approved request goes straight through", r.status == "ok", r.message)
+        check("audit says who checked",
+              audit.LOG[-1]["detail"].get("entitlement_checked_by") == "bny_orchestrator")
+    finally:
+        settings.TRUST_UPSTREAM_ENTITLEMENT = False
 
     print("\n5. Entitlement — checking it ourselves as well (flag off)")
     settings.TRUST_UPSTREAM_ENTITLEMENT = False
@@ -77,7 +82,7 @@ def run():
         check("audit says we checked it",
               audit.LOG[-1]["detail"].get("entitlement_checked_by") == "agent")
     finally:
-        settings.TRUST_UPSTREAM_ENTITLEMENT = True
+        settings.TRUST_UPSTREAM_ENTITLEMENT = False
 
     print("\n6. Ownership")
     r = dispatch(svc, adv, "lock_card", {"client_id": "C-88210", "card_id": "CARD-8807"}, confirmed=True)
@@ -104,6 +109,11 @@ def run():
                  {"client_id": "C-44090", "card_id": "CARD-9902",
                   "destination": ["Georgia (country)"], "start_date": str(start),
                   "end_date": str(start + timedelta(days=14))}, confirmed=True)
+    check("15 days rejected (14-day max)", r.status == "error", r.message)
+    r = dispatch(svc, adv, "travel_notice",
+                 {"client_id": "C-44090", "card_id": "CARD-9902",
+                  "destination": ["Georgia (country)"], "start_date": str(start),
+                  "end_date": str(start + timedelta(days=13))}, confirmed=True)
     check("valid window accepted", r.status == "ok", r.message)
 
     print("\n9. The audit records refusals too")

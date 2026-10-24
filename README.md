@@ -51,6 +51,7 @@ python -m tests.test_skills        # the skill split stays consistent
 python -m tests.test_choices       # typed answers to "which card / which client?"
 python -m tests.test_llm_runtime   # the code around GPT-5.4, with a scripted model
 python -m tests.test_hosting       # save/restore between messages, passcode, reset
+python -m tests.test_fixes         # every fix from team testing, by tracker test ID (see FIXES.md)
 python -m demo.run_demo            # a scripted conversation (keyword stand-in)
 ```
 

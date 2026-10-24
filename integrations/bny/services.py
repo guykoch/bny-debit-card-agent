@@ -49,6 +49,12 @@ class BnyClientDirectory:
     def get(self, client_id: str) -> Optional[Client]:
         raise NotImplementedError("Map to BNY's client lookup.")
 
+    def find_similar(self, query: str, advisor_id: str) -> list[Client]:
+        raise NotImplementedError("Map to BNY's fuzzy client search, or return [].")
+
+    def addresses(self, client_id: str):
+        raise NotImplementedError("Map to the addresses in the client's profile.")
+
 
 class BnyCardSystem:
     """
@@ -89,7 +95,8 @@ class BnyCardSystem:
     def unlock(self, card_id, advisor_id) -> dict:
         raise NotImplementedError
 
-    def replace(self, card_id, advisor_id, reason, delivery_address) -> dict:
+    def replace(self, card_id, advisor_id, reason, delivery_address,
+                flag_transactions=False) -> dict:
         raise NotImplementedError
 
     def close(self, card_id, advisor_id, reason) -> dict:

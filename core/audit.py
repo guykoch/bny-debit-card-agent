@@ -17,11 +17,41 @@ from typing import Any, Optional
 
 LOG: list[dict] = []
 _EXTRA_SINKS: list = []          # e.g. the Convex store in the hosted demo
+_READER = None                   # where recent rows are read from (hosted demo: Convex)
+
+REFUSED = ("refused", "not_entitled")
 
 
 def add_sink(fn) -> None:
     """Also send every row to fn(row). Used by the hosted demo to keep the audit in Convex."""
     _EXTRA_SINKS.append(fn)
+
+
+def set_reader(fn) -> None:
+    """Read audit rows from fn() instead of the in-process LOG (stateless hosting)."""
+    global _READER
+    _READER = fn
+
+
+def recent_count(advisor_id: str, action: str, minutes: int) -> int:
+    """Completed (not refused) actions of one kind by this advisor in the last N minutes."""
+    try:
+        rows = _READER() if _READER else LOG
+    except Exception:
+        rows = LOG
+    cutoff = datetime.now(timezone.utc).timestamp() - minutes * 60
+    n = 0
+    for r in rows or []:
+        if r.get("advisor_id") != advisor_id or r.get("action") != action:
+            continue
+        if r.get("outcome") in REFUSED:
+            continue
+        try:
+            if datetime.fromisoformat(r["timestamp"]).timestamp() >= cutoff:
+                n += 1
+        except (KeyError, ValueError):
+            continue
+    return n
 
 
 def _sink(row: dict) -> None:

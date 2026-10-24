@@ -9,7 +9,8 @@ description: Permanently close a card. Irreversible.
 
 # Close card
 
-Closes the card permanently. **This cannot be undone.**
+Closes the **debit card** permanently. **This cannot be undone.** The account
+itself stays open - always say "close the card", never "close the account".
 
 **Required:** `client_id`, `card_id`, `reason`
 

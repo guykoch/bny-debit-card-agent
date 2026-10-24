@@ -30,14 +30,33 @@ from __future__ import annotations
 import re
 from datetime import date, timedelta
 
-from core import cards, schemas, skills
+from core import cards, places, schemas, skills
 from core.guardrails import dispatch
-from core.handlers import ACTIONS
+from core.handlers import ACTIONS, allowed_addresses
 from core.models import Session, ToolResponse
 
 YES = {"yes", "y", "confirm", "ok", "okay", "go ahead", "do it", "proceed"}
 NO = {"no", "n", "cancel", "stop"}
 CHANGE_DATES = "change_dates"          # value of the travel notice's "Change dates" button
+SET_DATES = re.compile(r"^set_dates:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$")
+
+# F-13: a fixed rule, no AI. PIN changes stay with the cardholder.
+PIN_REPLY = ("Only the cardholder can reset or change a PIN, so I can't do that here. "
+             "The client can set a new PIN themselves.")
+_PIN = re.compile(r"\bpins?\b", re.I)
+
+
+def is_pin_request(text: str) -> bool:
+    return bool(_PIN.search(text or ""))
+
+
+def apply_new_dates(text: str, pending: dict) -> dict | None:
+    """F-22: the calendar sends "set_dates:YYYY-MM-DD:YYYY-MM-DD". Plain code: the
+    open travel notice form with only its dates replaced (checked again on dispatch)."""
+    m = SET_DATES.match((text or "").strip())
+    if not m:
+        return None
+    return {**pending["input"], "start_date": m.group(1), "end_date": m.group(2)}
 
 ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3,
             "fourth": 4, "4th": 4}
@@ -46,15 +65,18 @@ ORDINALS = {"first": 1, "1st": 1, "second": 2, "2nd": 2, "third": 3, "3rd": 3,
 def with_follow_up(tool: str, result: ToolResponse) -> ToolResponse:
     """Plain code: after a successful action, add the action's fixed follow-up
     sentence (e.g. offer a replacement after a lost/stolen report)."""
-    follow = ACTIONS[tool].follow_up if tool in ACTIONS else None
+    spec = ACTIONS.get(tool)
+    follow = spec.follow_up if spec else None
     if result.status == "ok" and follow:
         result.message = f"{result.message}\n{follow}"
         if result.card is not None:
             result.card["follow_up"] = follow
+            if spec.follow_up_actions:                 # F-25: Yes / No buttons
+                result.card["follow_up_actions"] = [
+                    {**a, "style": "option"} for a in spec.follow_up_actions]
     return result
 
-AMBIGUOUS_PLACES = {"georgia": ["Georgia (country)", "Georgia (US state)"],
-                    "springfield": ["Springfield, IL", "Springfield, MA", "Springfield, MO"]}
+AMBIGUOUS_PLACES = {"georgia": ["Georgia (country)", "Georgia (US state)"]}
 
 
 class Interpreter:
@@ -121,7 +143,8 @@ class Interpreter:
             weeks = 1
         if weeks is None:
             return None
-        return start.isoformat(), (start + timedelta(weeks=weeks)).isoformat()
+        # "two weeks" = 14 days counting both ends, the longest notice allowed
+        return start.isoformat(), (start + timedelta(days=weeks * 7 - 1)).isoformat()
 
 
 class Conversation:
@@ -199,6 +222,13 @@ class Conversation:
             if low in NO:
                 self.pending = None
                 return ToolResponse(status="ok", message="Cancelled. Nothing was changed.")
+            new_input = (apply_new_dates(text, self.pending)
+                         if self.pending["tool"] == "travel_notice" else None)
+            if new_input is not None:                     # F-22: dates from the calendar
+                result = self._dispatch("travel_notice", new_input)
+                if result.status == "awaiting_confirmation":
+                    self.pending = {**self.pending, "input": result.data["input"]}
+                return result
             if low == CHANGE_DATES:
                 self.pending = None
                 return ToolResponse(
@@ -209,6 +239,13 @@ class Conversation:
         # answering a question we asked (a client id, a card id, a destination)
         if self.pending and self.pending.get("missing"):
             return self._fill(text)
+
+        if low == "__no__":
+            self.pending = None
+            return ToolResponse(status="ok", message="OK. Nothing else was changed.")
+        if is_pin_request(text):
+            self.pending = None
+            return ToolResponse(status="needs_input", message=PIN_REPLY)
 
         tool = self.interp.intent(text)
         if tool is None:
@@ -300,7 +337,13 @@ class Conversation:
         elif field == "card_id":
             p["input"]["card_id"] = value
         elif field == "destination":
-            p["input"]["destination"] = [value]
+            kind, resolved = places.resolve_destination(value)
+            if kind != "ok":
+                p["missing"] = ["destination"]
+                return ToolResponse(status="needs_input",
+                                    message=f"{value} is not a country or US state on BNY's "
+                                            "list. Which country or US state is it?")
+            p["input"]["destination"] = [resolved]
         elif field in ("reason", "incident_type", "delivery_address"):
             p["input"][field] = value
 
@@ -325,7 +368,14 @@ class Conversation:
                     self.pending = {"tool": tool, "input": payload,
                                     "missing": ["destination"], "text": text}
                     return ToolResponse(status="needs_input", message="Where are they travelling to?")
-                payload["destination"] = dest
+                kind, value = places.resolve_destination(dest[0])
+                if kind != "ok":
+                    self.pending = {"tool": tool, "input": payload,
+                                    "missing": ["destination"], "text": text}
+                    return ToolResponse(status="needs_input",
+                                        message=f"{dest[0]} is not a country or US state on "
+                                                "BNY's list. Which country or US state is it?")
+                payload["destination"] = [value]
             if "start_date" not in payload:
                 window = self.interp.dates(text)
                 if not window:
@@ -337,7 +387,8 @@ class Conversation:
             payload.setdefault("reason", "damaged" if "damag" in text.lower() else "other")
             if "delivery_address" not in payload:
                 card = self.services.cards.get_card(payload["card_id"])
-                payload["delivery_address"] = card.address_on_file
+                ok = allowed_addresses(self.services, card.client_id) if card else []
+                payload["delivery_address"] = ok[0].address if ok else card.address_on_file
 
         if tool == "report_lost_stolen":
             payload.setdefault("incident_type",

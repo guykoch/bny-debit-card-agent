@@ -1,0 +1,27 @@
+client_id,label,address,state,country
+C-10220,Home,"77 Chestnut Rd, Greenwich, CT 06830",CT,US
+C-10220,Hawaii home,"45 Kalakaua Ave, Honolulu, HI 96815",HI,US
+C-10220,Mailing,"PO Box 123, Hartford, CT 06101",CT,US
+C-10344,Home,"120 Lake Shore Dr, Chicago, IL 60601",IL,US
+C-10344,Paris apartment,"12 Rue de Rivoli, 75001 Paris, France",,FR
+C-11580,Home,"9 Park Lane, Short Hills, NJ 07078",NJ,US
+C-12090,Home,"41 Oak Terrace, Wellesley, MA 02481",MA,US
+C-12090,Office,"500 Elm St, Austin, TX 78701",TX,US
+C-12771,Home,"630 Brickell Ave, Miami, FL 33131",FL,US
+C-12771,San Juan apartment,"1050 Ashford Ave, San Juan, PR 00907",PR,US
+C-13402,Home,"18 Kearny St, San Francisco, CA 94108",CA,US
+C-14118,Home,"300 Peachtree St, Atlanta, GA 30308",GA,US
+C-15003,Home,"22 Cedar Way, Scarsdale, NY 10583",NY,US
+C-15644,Home,"4 Rue Vidal, Montreal, QC H2T 1A1",QC,CA
+C-16210,Home,"15 Dorset Rd, Boston, MA 02130",MA,US
+C-16877,Home,"900 Lamar St, Houston, TX 77002",TX,US
+C-17309,Home,"3 Birch Ct, Minneapolis, MN 55401",MN,US
+C-18022,Home,"55 Alameda Ave, San Diego, CA 92101",CA,US
+C-18450,Home,"210 Walnut St, Philadelphia, PA 19106",PA,US
+C-19006,Home,"8 Orchard Rd, Darien, CT 06820",CT,US
+C-44090,Home,"88 Beacon St, Boston, MA 02108",MA,US
+C-44091,Home,"5 Elm Ave, Chicago, IL 60601",IL,US
+C-77310,Home,"2 Market St, San Francisco, CA 94105",CA,US
+C-88210,Home,"14 Hudson St, New York, NY 10013",NY,US
+C-88210,Vacation home,"220 Ocean Dr, Miami Beach, FL 33139",FL,US
+C-99001,Home,"410 Pine St, Seattle, WA 98101",WA,US

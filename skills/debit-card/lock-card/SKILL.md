@@ -18,8 +18,8 @@ Temporarily blocks the card. Reversible.
 
 - If the advisor mentions the card being lost or stolen, ask whether they want
   **report-lost-stolen** instead. That locks the card *and* flags the account.
-- If the card is already locked, say so. Do not call the tool again.
-- If the card is closed, a lock is not possible; say a replacement is needed.
+- Already locked, closed or pending cards are answered by the system as soon
+  as the card is known; you will not need to explain them.
 
 ## Examples
 

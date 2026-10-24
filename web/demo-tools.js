@@ -17,6 +17,9 @@
   .demo-bar button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 999px;
     padding: 5px 12px; border: 1px solid #A5851F; background: #fff; color: #6B5310; }
   .demo-bar button:disabled { opacity: .6; cursor: default; }
+  .demo-bar .ask { font-weight: 600; font-size: 12.5px !important; }
+  .demo-bar button.go { background: #B03030; border-color: #B03030; color: #fff; }
+  .demo-toast.bad { background: #B03030; }
   .demo-toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%);
     background: #2E7D5B; color: #fff; padding: 8px 16px; border-radius: 8px;
     font: 13px "Segoe UI", Calibri, Arial, sans-serif; z-index: 1001; }
@@ -73,34 +76,47 @@
     });
   }
 
-  function toast(text) {
+  function toast(text, bad) {
     const t = document.createElement("div");
-    t.className = "demo-toast"; t.textContent = text;
+    t.className = "demo-toast" + (bad ? " bad" : ""); t.textContent = text;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    setTimeout(() => t.remove(), bad ? 5000 : 2600);
   }
 
+  // The confirmation happens inside the bar (no browser pop-ups: iPhone Safari
+  // offers "Suppress dialogs" after the first one, which would block Reset).
   function showBar() {
     const bar = document.createElement("div");
     bar.className = "demo-bar";
-    bar.innerHTML = `<b>DEMO CONTROLS</b><span class="grow">Not part of the product · shared data</span>
-      <button type="button">Reset demo data</button>`;
-    const btn = bar.querySelector("button");
-    btn.onclick = async () => {
-      if (!confirm("Reset all demo data for everyone?\n\nCards, travel notices, conversations " +
-                   "and the audit go back to the saved starting state.")) return;
-      btn.disabled = true; btn.textContent = "Resetting…";
+    const idle = () => {
+      bar.innerHTML = `<b>DEMO CONTROLS</b><span class="grow">Not part of the product · shared data</span>
+        <button type="button" data-a="ask">Reset demo data</button>`;
+    };
+    const ask = () => {
+      bar.innerHTML = `<span class="grow ask">Reset all data for everyone?</span>
+        <button type="button" data-a="cancel">Cancel</button>
+        <button type="button" data-a="go" class="go">Yes, reset</button>`;
+    };
+    const go = async () => {
+      bar.querySelectorAll("button").forEach(b => b.disabled = true);
+      bar.querySelector(".go").textContent = "Resetting…";
       try {
         const r = await fetch("/api/demo/reset", { method: "POST", headers: headers() });
         const out = await r.json();
-        if (r.status === 401) { await showGate(); return; }
+        if (r.status === 401) { idle(); await showGate(); return; }
         if (out.status !== "ok") throw new Error(out.message || "Reset failed");
         toast("Demo data reset to the starting state");
         window.NetXChat.newConversation();
       } catch (e) {
-        alert("Reset failed: " + e.message);
-      } finally { btn.disabled = false; btn.textContent = "Reset demo data"; }
+        toast("Reset failed: " + e.message, true);
+      }
+      idle();
     };
+    bar.onclick = (e) => {
+      const a = e.target.closest("button")?.dataset.a;
+      if (a === "ask") ask(); else if (a === "cancel") idle(); else if (a === "go") go();
+    };
+    idle();
     document.getElementById("demo-slot").appendChild(bar);
   }
 

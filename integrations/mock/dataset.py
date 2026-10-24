@@ -32,6 +32,15 @@ def _load_cards() -> list[dict]:
     return _rows("cards.csv")
 
 
+def _load_addresses() -> dict[str, list[dict]]:
+    """addresses.csv: every address in each client's profile (one row each)."""
+    out: dict[str, list[dict]] = {}
+    for row in _rows("addresses.csv"):
+        cid = row.pop("client_id")
+        out.setdefault(cid, []).append(row)
+    return out
+
+
 def _load_grants() -> dict[str, dict[str, set]]:
     """
     entitlements.csv is one row per advisor-client pair, with an `actions`
@@ -55,6 +64,7 @@ def _load_grants() -> dict[str, dict[str, set]]:
 
 CLIENTS = _load_clients()
 CARDS = _load_cards()
+ADDRESSES = _load_addresses()
 GRANTS = _load_grants()
 
 

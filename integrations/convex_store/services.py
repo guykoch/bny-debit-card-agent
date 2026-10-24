@@ -70,7 +70,8 @@ class ConvexCardSystem:
         card = self.client.mutation("setCardStatus", card_id=card_id, status="active")
         return {"status": "active", "message": f"Card ending {card['card_last4']} is unlocked."}
 
-    def replace(self, card_id, advisor_id, reason, delivery_address) -> dict:
+    def replace(self, card_id, advisor_id, reason, delivery_address,
+                flag_transactions=False) -> dict:
         old = self.client.mutation("setCardStatus", card_id=card_id, status="closed")
         while True:                                   # a new id not already in use
             new_id = f"CARD-{random.randint(1000, 9999)}"
@@ -80,8 +81,11 @@ class ConvexCardSystem:
             "card_id": new_id, "client_id": old["client_id"], "client_name": old["client_name"],
             "card_last4": new_id[-4:], "account_last4": old["account_last4"],
             "status": "pending", "address_on_file": delivery_address})
+        if flag_transactions:
+            self.client.mutation("addFlag", card_id=card_id, advisor_id=advisor_id)
+        extra = " Recent transactions flagged for review." if flag_transactions else ""
         return {"status": "replacement_ordered", "new_card_id": new_id,
-                "message": f"Replacement ordered, delivering to {delivery_address}."}
+                "message": f"Replacement ordered, delivering to {delivery_address}.{extra}"}
 
     def close(self, card_id, advisor_id, reason) -> dict:
         card = self.client.mutation("setCardStatus", card_id=card_id, status="closed")
