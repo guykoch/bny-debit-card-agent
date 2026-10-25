@@ -110,7 +110,7 @@ Checks: `python -m tests.test_pending2` (by tracker test ID).
 | F-49 | P2-03 | Picking an address suggestion only selects it; the Apt / suite field, then "Use this address" (or Change). | web/index.html `renderAddress` |
 | F-50 | P2-04 | Part of a name ("Jane") matching one client: "Is this for Jane Miller (New York, born 1979)?" first. No check when the full name is written. | llm_runtime `_full_name_said`, `_client_from_words`, `_find_client` |
 | F-51 | P2-05 | An address typed in the message: outside the US -> said above the address field; a US address -> put in the field so the suggestions show at once. | llm_runtime `_typed_address`, `_outside_us`, `_address_input`; web/index.html (`prefill`) |
-| F-52 | P2-06 | Capitals never matter; a name 1-2 letters off (or with swapped letters) gets "Did you mean Jane Miller (New York, born 1979)?" Yes / Another client / Cancel. Only this advisor's clients; the not-found line repeats what was typed. | llm_runtime `_fuzzy_clients`, `_did_you_mean`, `_edits`, `_close` |
+| F-52 | P2-06 | Capitals never matter; a name 1-2 letters off (or with swapped letters) gets "Did you mean Jane Miller (New York, born 1979)?" Yes / Another client / Cancel. Only this advisor's clients; the not-found line repeats what was typed. Hyphenated names (Osei-Bonsu) are matched word by word. | llm_runtime `_fuzzy_clients`, `_did_you_mean`, `_edits`, `_close` |
 
 Also: "never actually got the card" is now read as the reason Never received.
 No Convex change: push to GitHub and Vercel redeploys.

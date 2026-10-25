@@ -143,6 +143,18 @@ def run():
     r = conv.send("lock robert castelano card")
     check("T-52c", "also when the AI looked up the misspelt name",
           r.card["message"].startswith("Did you mean Robert Castellano"))
+    m = ScriptedModel(route("close-card"), call("find_client", query="margaret osei-bonshu"))
+    _, conv = fresh(m)
+    r = conv.send("cloase margaret osei-bonshu's card permanently, she is switching banks")
+    check("T-52c", "hyphenated name with a typo, lower case",
+          r.card["message"] == "Did you mean Margaret Osei-Bonsu (Short Hills, born 1958)?")
+    r = conv.send("Yes, Margaret Osei-Bonsu")
+    check("T-52c", "Yes: then the permission refusal (no close permission)",
+          r.data.get("code") == "not_entitled")
+    _, conv = fresh(CodeOnly())
+    r = conv.send("lock margaret osei-bonshu card")
+    check("T-52c", "same when code reads the name", r.card["message"].startswith(
+        "Did you mean Margaret Osei-Bonsu"))
     _, conv = fresh(CodeOnly())
     r = conv.send("lock sara chen card")
     check("T-52d", "several close names: 'Did you mean one of these?' buttons",

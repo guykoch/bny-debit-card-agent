@@ -365,7 +365,7 @@ class GptConversation:
         """
         visible = self._visible_clients()
         name_words = {w for c in visible for w in re.split(r"[\s.\-]+", c.name.lower()) if w}
-        words = [re.sub(r"'s$|'$", "", w) for w in re.findall(r"[a-z][a-z'\-]*", self._words())]
+        words = [re.sub(r"'s$|'$", "", w) for w in re.findall(r"[a-z][a-z']*", self._words())]
         for n in (3, 2, 1):
             for i in range(len(words) - n + 1):
                 gram = words[i:i + n]
@@ -406,7 +406,8 @@ class GptConversation:
     @staticmethod
     def _fuzzy_clients(tokens: list, visible: list) -> list:
         """This advisor's clients whose name matches every typed word, allowing small typos."""
-        tokens = [t.lower().strip(".'") for t in tokens if len(t.strip(".'")) > 1]
+        tokens = [re.sub(r"'s$|'$", "", t) for t in re.split(r"[\s\-.,]+", " ".join(tokens).lower())]
+        tokens = [t for t in tokens if len(t) > 1]          # "osei-bonshu" -> osei, bonshu
         if not tokens:
             return []
         out = []
