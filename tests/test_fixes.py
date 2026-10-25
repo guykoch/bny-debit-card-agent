@@ -350,7 +350,8 @@ def run():
     _, conv = fresh(m)
     r = conv.send("Lock Robert Castellanos's card")
     check("T-24a", "a near spelling is offered, never chosen silently",
-          r.card["title"] == "Did you mean?" and values(r) == ["C-10220"])
+          r.card["title"] == "Did you mean?" and values(r) == ["C-10220", "__another__"]
+          and r.card["message"].startswith("Did you mean Robert Castellano"))
     m = ScriptedModel(route("lock-card"), call("find_client", query="Robert Castellanos"),
                       say("No matching client found."))
     _, conv = fresh(m, "ADV-5678")

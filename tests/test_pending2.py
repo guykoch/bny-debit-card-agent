@@ -123,6 +123,39 @@ def run():
           kind(r) == "address_input" and r.card.get("prefill") == "1100 Congress Ave, Austin"
           and "Pick the address" in r.card.get("info", ""))
 
+    print("\nP2-06 (F-52)  Capitals and small typos in the client's name")
+    _, conv = fresh(CodeOnly())
+    r = conv.send("LOCK JANE MILLER'S CARD")
+    check("T-52a", "any capitalisation of the full name: found, no extra question",
+          r.status == "awaiting_confirmation" and r.data["input"]["client_id"] == "C-88210")
+    for typed in ("Lock Jnae Millre's card", "lock jane millar card", "Lock Jane Mlller's card"):
+        _, conv = fresh(CodeOnly())
+        r = conv.send(typed)
+        check("T-52b", f"typo '{typed}': 'Did you mean Jane Miller (New York, born 1979)?'",
+              kind(r) == "choice" and r.card["title"] == "Did you mean?"
+              and r.card["message"] == "Did you mean Jane Miller (New York, born 1979)?"
+              and values(r) == ["C-88210", "__another__"] and has_cancel(r))
+    r = conv.send("Yes, Jane Miller")
+    check("T-52b", "Yes: carries on with Jane Miller", r.status == "awaiting_confirmation"
+          and r.data["input"]["client_id"] == "C-88210")
+    m = ScriptedModel(route("lock-card"), call("find_client", query="robert castelano"))
+    _, conv = fresh(m)
+    r = conv.send("lock robert castelano card")
+    check("T-52c", "also when the AI looked up the misspelt name",
+          r.card["message"].startswith("Did you mean Robert Castellano"))
+    _, conv = fresh(CodeOnly())
+    r = conv.send("lock sara chen card")
+    check("T-52d", "several close names: 'Did you mean one of these?' buttons",
+          r.card["title"] == "Did you mean?" and len(values(r)) == 2)
+    _, conv = fresh(CodeOnly(), "ADV-5678")
+    r = conv.send("Lock Jnae Millre's card")
+    check("T-52e", "another advisor's client is never suggested",
+          kind(r) == "client_input" and "Jane Miller" not in json.dumps(r.card))
+    _, conv = fresh(CodeOnly(), "ADV-5678")
+    r = conv.send("Lock Robert Castellanos's card")
+    check("T-52e", "and the not-found line repeats what was typed, never the real spelling",
+          r.card.get("notice") == "No client named Robert Castellanos was found.")
+
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     return 1 if FAIL else 0
 

@@ -103,7 +103,7 @@ class Interpreter:
         runs, run = [], []
         for w in cleaned.split():
             if w[:1].isupper():
-                run.append(w.rstrip("'s").rstrip("'"))
+                run.append(re.sub(r"'s$|'$", "", w))
             elif run:
                 runs.append(" ".join(run)); run = []
         if run:

@@ -131,6 +131,37 @@ ACTION_LABELS = {"lock-card": "Lock the card", "unlock-card": "Unlock the card",
                  "update-address": "Update an address"}
 
 
+def _name_parts(name: str) -> list:
+    """Name words without initials: 'Sarah M. Chen' -> ['sarah', 'chen']."""
+    return [w for w in re.split(r"[\s.\-]+", name.lower()) if len(w) > 1]
+
+
+def _edits(a: str, b: str) -> int:
+    """Letters to change, add, remove or swap to turn a into b (Damerau-Levenshtein)."""
+    d = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        d[i][0] = i
+    for j in range(len(b) + 1):
+        d[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[len(a)][len(b)]
+
+
+def _close(typed: str, real: str) -> bool:
+    """Same word with a small typo: 1 letter off for short words, 2 for longer ones."""
+    typed, real = typed.lower(), real.lower()
+    if typed == real:
+        return True
+    if len(typed) < 3:
+        return False
+    return _edits(typed, real) <= (1 if len(real) <= 4 else 2)
+
+
 def schemas_fields(tool_name: str) -> set:
     from core import schemas
     spec = schemas.load().get(tool_name) or {}
@@ -345,18 +376,9 @@ class GptConversation:
                 near = [words[j] for j in (i - 1, i + n) if 0 <= j < len(words)]
                 if hits and any(                            # "Robert Castellanos": a typo
                         w not in name_words and any(
-                            difflib.SequenceMatcher(None, w, x).ratio() >= 0.75
-                            for c in hits for x in re.split(r"[\s.\-]+", c.name.lower()))
+                            _close(w, x) for c in hits for x in _name_parts(c.name))
                         for w in near):
-                    panel = cards.choice_card(
-                        "Did you mean?", "No client is named exactly like that. "
-                        + ("Did you mean this client?" if len(hits) == 1
-                           else "Did you mean one of these?"),
-                        [{"label": _client_label(c), "value": c.client_id} for c in hits])
-                    self.seen.update(c.client_id for c in hits)
-                    self.pending = {"kind": "choice", "field": "client_id", "panel": panel}
-                    return ToolResponse(status="needs_input", message=cards.to_text(panel),
-                                        card=panel)
+                    return self._did_you_mean(hits)
                 if len(hits) == 1:
                     if not self._full_name_said(hits[0]):     # P2-04: "Jane" -> check first
                         return self._confirm_client(hits[0])
@@ -370,9 +392,50 @@ class GptConversation:
                     self.pending = {"kind": "choice", "field": "client_id", "panel": panel}
                     return ToolResponse(status="needs_input", message=cards.to_text(panel),
                                         card=panel)
+        # Typos and swapped letters in the whole name ("Jnae Millre", "robert castelano")
+        free = [w for w in words if len(w) > 1 and w not in self._VERBS]
+        for n in (3, 2):
+            for i in range(len(free) - n + 1):
+                hits = self._fuzzy_clients(free[i:i + n], visible)
+                if hits:
+                    return self._did_you_mean(hits)
         if self.session.client_id:                           # NetX360 has a client open
             return self.session.client_id
         return None
+
+    @staticmethod
+    def _fuzzy_clients(tokens: list, visible: list) -> list:
+        """This advisor's clients whose name matches every typed word, allowing small typos."""
+        tokens = [t.lower().strip(".'") for t in tokens if len(t.strip(".'")) > 1]
+        if not tokens:
+            return []
+        out = []
+        for c in visible:
+            parts = _name_parts(c.name)
+            if len(tokens) > len(parts) or (len(tokens) == 1 and len(parts) > 1
+                                            and len(tokens[0]) < 5):
+                continue
+            free, edits = list(parts), 0
+            for t in tokens:
+                best = min(free, key=lambda p: _edits(t, p), default=None)
+                if best is None or not _close(t, best):
+                    break
+                edits += _edits(t, best)
+                free.remove(best)
+            else:
+                if edits <= 3:
+                    out.append((edits, c))
+        out.sort(key=lambda x: x[0])
+        return [c for _, c in out[:4]]
+
+    def _did_you_mean(self, hits: list) -> ToolResponse:
+        """Typo in the name: one-tap check (one client) or the choices (several)."""
+        if len(hits) == 1:
+            return self._confirm_client(hits[0], prefix="Did you mean")
+        self.seen.update(c.client_id for c in hits)
+        return self._ask("client_id", "Did you mean?",
+                         "No client is named exactly like that. Did you mean one of these?",
+                         [{"label": _client_label(c), "value": c.client_id} for c in hits])
 
     def _client_card(self, notice: str = "") -> ToolResponse:
         """P-16/P-17: "Which client?" as a field with suggestions (this advisor's clients)."""
@@ -399,7 +462,7 @@ class GptConversation:
         months = {m.capitalize() for m in places._MONTH_WORDS}
         for m in re.finditer(r"\b([A-Z][a-z'\-]+(?:\s+[A-Z]\.?)?(?:\s+[A-Z][a-z'\-]+){1,2})\b",
                              text):
-            words = [w.rstrip("'s").rstrip("'") for w in m.group(1).split()]
+            words = [re.sub(r"'s$|'$", "", w) for w in m.group(1).split()]
             while words and words[0].lower() in self._VERBS:
                 words = words[1:]
             if len(words) < 2 or any(w in months for w in words):
@@ -418,13 +481,14 @@ class GptConversation:
         parts = [w for w in re.findall(r"[a-z]+", client.name.lower()) if len(w) > 1]
         return all(p in said for p in parts)
 
-    def _confirm_client(self, client, question: str = "") -> ToolResponse:
+    def _confirm_client(self, client, question: str = "", prefix: str = "Is this for") -> ToolResponse:
         """One-tap check: 'Is this for Jane Miller?' Yes / Another client / Cancel."""
         self.seen.add(client.client_id)
         bits = [client.name] + ([client.city] if getattr(client, "city", "") else []) + \
                ([f"born {client.birth_year}"] if getattr(client, "birth_year", "") else [])
         label = bits[0] + (f" ({', '.join(bits[1:])})" if len(bits) > 1 else "")
-        return self._ask("client_confirm", "Which client?", question or f"Is this for {label}?",
+        title = "Did you mean?" if prefix.startswith("Did") else "Which client?"
+        return self._ask("client_confirm", title, question or f"{prefix} {label}?",
                          [{"label": f"Yes, {client.name}", "value": client.client_id},
                           {"label": "Another client", "value": "__another__"}])
 
@@ -1359,12 +1423,18 @@ class GptConversation:
         r = self._dispatch("find_client", args)
         if r.status == "error":
             self._note(f"find_client({args.get('query')!r}): no matching client.")
+            hits = self._fuzzy_clients(args["query"].split(), self._visible_clients())
+            if hits:                                         # "Jnae Millre" -> Jane Miller?
+                return None, self._did_you_mean(hits)
             self.task["not_found"] = " ".join(w.capitalize() if w.islower() else w
                                               for w in args["query"].split())   # P2-01
             return None, self._ask_client()
         found = r.data["clients"]
         self.seen.update(c["client_id"] for c in found)
         if r.status == "needs_input":                       # several clients, or a near spelling
+            if r.data.get("similar"):                         # a near spelling: ask first
+                return None, self._did_you_mean(
+                    [self.services.clients.get(c["client_id"]) for c in found])
             chosen = None if r.data.get("similar") else \
                 self._already_chosen("client_id", found, "client_id", "account_last4")
             if chosen is None:

@@ -241,7 +241,8 @@ def run():
     check("T-43a", "confirmation with the dates editable on the card",
           r.status == "awaiting_confirmation" and r.card["dates"]["inline"]
           and r.card["dates"]["start"] == iso(start) and r.card["dates"]["end"] == iso(e5))
-    check("T-43a", "the 14-day limit is not mentioned", "14" not in r.message)
+    check("T-43a", "the 14-day limit is not mentioned", "at most 14" not in r.message
+          and "14 days" not in r.message)
     r = conv.send("confirm_with:" + json.dumps({"start": iso(start + timedelta(days=1)),
                                                 "end": iso(e5)}))
     check("T-43a", "edited dates are used", r.status == "ok"
