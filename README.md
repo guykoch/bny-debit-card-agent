@@ -31,7 +31,7 @@ You need Python 3.10 or newer and an OpenAI API key. Nothing to install.
    - *What's Jane's balance?* (not one of the six actions: a fixed reply)
 4. Switch advisor in the header to show that ADV-5678 cannot see Jane Miller.
    Restart the server to reset the mock cards. `http://localhost:8080/api/audit`
-   shows the audit trail.
+   shows the action log, `/api/audit/chat` the chat log.
 
 With no key, the same page runs on the keyword stand-in (no AI) and says so
 under the header.

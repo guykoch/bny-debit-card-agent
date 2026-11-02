@@ -204,21 +204,75 @@ export const saveConversation = mutation({
 
 // ------------------------------------------------------------------ audit
 
-export const addAudit = mutation({
+// One row in audit_actions (a card action done or stopped).
+export const addAuditAction = mutation({
   args: { secret: v.string(), row: v.any() },
   handler: async (ctx, { secret, row }) => {
     checkSecret(secret);
-    await ctx.db.insert("audit", { row, at: Date.now() });
+    const str = (x: unknown) => (x === null || x === undefined ? "" : String(x));
+    await ctx.db.insert("audit_actions", {
+      when: str(row.when),
+      advisor_id: str(row.advisor_id),
+      conversation_id: str(row.conversation_id),
+      action_name: str(row.action_name),
+      result: str(row.result),
+      client: str(row.client),
+      card: str(row.card),
+      details: str(row.details),
+      message: str(row.message),
+      advisor_request: str(row.advisor_request),
+      at: typeof row.at === "number" ? row.at : Date.now(),
+      record: row.record ?? null,
+    });
     return null;
   },
 });
 
+// The lines of one chat message (the advisor's line and the chat's answer).
+export const addAuditChat = mutation({
+  args: { secret: v.string(), rows: v.array(v.any()) },
+  handler: async (ctx, { secret, rows }) => {
+    checkSecret(secret);
+    const str = (x: unknown) => (x === null || x === undefined ? "" : String(x));
+    for (const row of rows) {
+      await ctx.db.insert("audit_chat", {
+        when: str(row.when),
+        advisor_id: str(row.advisor_id),
+        conversation_id: str(row.conversation_id),
+        speaker: str(row.speaker),
+        message: str(row.message),
+        input: str(row.input),
+        card: str(row.card),
+        raw_input: str(row.raw_input),
+        at: typeof row.at === "number" ? row.at : Date.now(),
+      });
+    }
+    return null;
+  },
+});
+
+// Recent action records (the server's volume limit reads these).
 export const listAudit = query({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {
     checkSecret(secret);
-    const docs = await ctx.db.query("audit").order("asc").take(1000);
-    return docs.map((d) => d.row);
+    const docs = await ctx.db.query("audit_actions").order("desc").take(1000);
+    return docs.map((d) => d.record).reverse();
+  },
+});
+
+// One conversation, in order (demo endpoint /api/audit/chat).
+export const listChat = query({
+  args: { secret: v.string(), conversation_id: v.optional(v.string()) },
+  handler: async (ctx, { secret, conversation_id }) => {
+    checkSecret(secret);
+    const docs = conversation_id
+      ? await ctx.db
+          .query("audit_chat")
+          .withIndex("by_conversation", (q) => q.eq("conversation_id", conversation_id))
+          .collect()
+      : await ctx.db.query("audit_chat").order("desc").take(500);
+    return docs.map(plain);
   },
 });
 
@@ -273,7 +327,8 @@ export const reset = mutation({
       .first();
     if (!saved) throw new Error("No saved default state yet. Start the server once first.");
     const counts: Record<string, number> = {};
-    for (const table of ["cards", "addresses", "travel_notices", "flags", "conversations", "audit"] as const) {
+    for (const table of ["cards", "addresses", "travel_notices", "flags", "conversations",
+                       "audit_actions", "audit_chat", "audit"] as const) {
       const docs = await ctx.db.query(table).collect();
       for (const d of docs) await ctx.db.delete(d._id);
       counts[table] = docs.length;

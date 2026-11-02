@@ -9,6 +9,8 @@ core/ knows or cares where the cards live.
 
 from __future__ import annotations
 
+from core.timefmt import us_range
+
 import hashlib
 import os
 import random
@@ -134,4 +136,4 @@ class ConvexCardSystem:
                              start_date=start_date, end_date=end_date)
         return {"status": "travel_notice_added",
                 "message": f"Travel notice added for {', '.join(destination)}, "
-                           f"{start_date} to {end_date}."}
+                           f"{us_range(start_date, end_date)}."}

@@ -401,7 +401,7 @@ function renderTextInput(card) {
 // both days). The server checks the same rules again.
 function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function addDays(iso, n) { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); }
-function niceDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+function niceDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }); }   // 11/20/2026
 
 function datePicker(cardEl, d) {
   const old = cardEl.querySelector(".dates");
@@ -607,7 +607,7 @@ async function send(utterance, display) {
   try {
     const res = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json", ...demoHeaders() },
-      body: JSON.stringify({ advisor_id: advisorSel.value, conversation_id: conversationId, utterance })
+      body: JSON.stringify({ advisor_id: advisorSel.value, conversation_id: conversationId, utterance, display: display ?? utterance })
     });
     const r = await res.json();
     typing(false); renderReply(r);

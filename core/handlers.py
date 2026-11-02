@@ -22,6 +22,7 @@ from datetime import date
 from typing import Callable, Optional
 
 from config import settings
+from core.timefmt import us_date
 from core import places
 from core.errors import BadRequest, NotPossible
 from core.models import Card
@@ -295,8 +296,7 @@ def _travel_execute(svc, session, ti, card):
 
 
 def _readable(iso: str) -> str:
-    d = date.fromisoformat(iso)
-    return f"{d.day} {d:%b %Y}"                      # 6 Nov 2026
+    return us_date(iso)                              # 11/06/2026 (US format)
 
 
 def _travel_summary(ti, card):
@@ -353,7 +353,7 @@ def _addr_execute(svc, session, ti, client):
         return {"status": "address_changed", "label": ti["address_label"],
                 "message": f"{client.name}'s {ti['address_label'].lower()} address is now "
                            f"{ti['new_address']}."}
-    new.label = f"Delivery (added {date.today():%d %b %Y})"
+    new.label = f"Delivery (added {us_date(date.today())})"
     svc.clients.add_address(client.client_id, new)
     return {"status": "address_added", "label": new.label,
             "message": f"Delivery address added to {client.name}'s profile: {ti['new_address']}."}

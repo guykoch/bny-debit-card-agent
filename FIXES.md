@@ -115,6 +115,18 @@ Checks: `python -m tests.test_pending2` (by tracker test ID).
 Also: "never actually got the card" is now read as the reason Never received.
 No Convex change: push to GitHub and Vercel redeploys.
 
+## US dates and the audit logs (November 2026)
+
+Checks: `python -m tests.test_audit`.
+
+| Fix | What changed | Where |
+|---|---|---|
+| F-53 | Every date shown is US format: 11/20/2026 on cards, messages and the chat page; times as 3:45:12 PM ET (Eastern) | `core/timefmt.py`, handlers `_readable`, card services, web/index.html `niceDate` |
+| F-54 | Audit in two logs under one heading: `audit_actions` (every card action, Completed / Refused / Not permitted, with client, card, card details and the advisor's words) and `audit_chat` (every line of every conversation: what was typed or clicked, and the chat's answer with its card and buttons). Same first columns in both (when, advisor_id, conversation_id). | `core/audit.py` (`write`, `chat_turn`), `interfaces/a2a_server.py` (`_log_chat`, `/api/audit/chat`), `convex-demo-db/convex/schema.ts`, `demo.ts` |
+
+**Redeploy Convex this time:** `convex-demo-db/` changed (two new audit tables).
+After pushing, run `npx convex deploy` from `convex-demo-db/`.
+
 Profile addresses now change during a demo, so they live in Convex on the hosted
 demo (new `addresses` table; Reset restores them from `addresses.csv`).
 

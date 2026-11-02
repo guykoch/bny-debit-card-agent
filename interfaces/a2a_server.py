@@ -19,7 +19,8 @@ Endpoints
     POST /  or  /api/chat   one advisor message (or button click) in, one reply out
     GET  /                  the mock NetX AI chat page (web/index.html)
     GET  /api/info          which runtime is active, and the demo advisors
-    GET  /api/audit         the audit trail so far (demo only)
+    GET  /api/audit         the action log so far (demo only)
+    GET  /api/audit/chat    the chat log (?conversation=<id> for one conversation)
     /api/demo/*             demo-only tools (passcode, reset) - see demo_tools/
 """
 
@@ -56,7 +57,8 @@ def services():
         if settings.active_store() == "convex":
             from integrations.convex_store.client import ConvexClient
             client = ConvexClient()
-            audit.add_sink(lambda row: client.mutation("addAudit", row=row))
+            audit.add_sink(lambda row: client.mutation("addAuditAction", row=row))
+            audit.add_chat_sink(lambda rows: client.mutation("addAuditChat", rows=rows))
             audit.set_reader(lambda: client.query("listAudit"))
     return _SERVICES
 
@@ -107,9 +109,38 @@ def handle(payload: dict) -> dict:
             and state.get("runtime") == settings.active_runtime()):
         conv.restore(state)
 
-    response = conv.send(payload.get("utterance", ""))
+    utterance = payload.get("utterance", "")
+    try:
+        response = conv.send(utterance)
+        out = response.to_dict()
+    except Exception as e:                                   # logged, then reported as before
+        out = {"status": "error", "message": f"Something went wrong: {e}", "card": None}
+        _log_chat(conv.session, payload, utterance, out)
+        raise
     threads().save(conv_id, conv.snapshot())
-    return response.to_dict()
+    _log_chat(conv.session, payload, utterance, out)
+    return out
+
+
+_BUTTON_PREFIXES = ("address_pick:", "client_pick:", "travel_form:", "confirm_with:",
+                    "text_input:", "set_dates:")
+_BUTTON_WORDS = {"__cancel__", "__actions__", "__no__", "__other__", "__another__",
+                 "confirm", "confirm_ack", "cancel", "change_dates"}
+
+
+def _log_chat(session, payload: dict, utterance: str, reply: dict) -> None:
+    """audit_chat: what the advisor typed or clicked, and what the chat showed back."""
+    display = str(payload.get("display") or "").strip()
+    raw = (utterance or "").strip()
+    clicked = bool(display and display != raw) or raw.startswith(_BUTTON_PREFIXES) \
+        or raw.lower() in _BUTTON_WORDS
+    kind = "Form" if raw.startswith(("address_pick:", "client_pick:", "travel_form:",
+                                     "confirm_with:", "text_input:", "set_dates:")) \
+        else ("Button" if clicked else "Typed")
+    try:
+        audit.chat_turn(session, display or raw, raw, kind, reply)
+    except Exception:
+        pass                                                 # logging never breaks the chat
 
 
 def info() -> dict:
@@ -145,6 +176,15 @@ def client_suggestions(advisor_id: str, text: str) -> list[dict]:
                ([f"born {c.birth_year}"] if getattr(c, "birth_year", "") else [])
         out.append({"id": c.client_id, "label": " · ".join(bits)})
     return out
+
+
+def list_chat(conversation_id: str = "") -> list:
+    """audit_chat rows (all recent ones, or one conversation)."""
+    if settings.active_store() == "convex":
+        from integrations.convex_store.client import ConvexClient
+        args = {"conversation_id": conversation_id} if conversation_id else {}
+        return ConvexClient().query("listChat", **args)
+    return [r for r in audit.CHAT if not conversation_id or r["conversation_id"] == conversation_id]
 
 
 def list_audit() -> list:
@@ -189,6 +229,8 @@ def route(method: str, path: str, headers, body: bytes):
         return js(401, {"status": "error", "message": "Passcode required.", "card": None})
     if method == "GET" and path == "/api/audit":
         return js(200, list_audit())
+    if method == "GET" and path == "/api/audit/chat":
+        return js(200, list_chat(params.get("conversation", "")))
     if method == "GET" and path == "/api/places/suggest":
         # Travel destinations on BNY's list (countries + US states), as the advisor types.
         from core import places

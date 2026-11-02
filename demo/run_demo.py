@@ -58,8 +58,8 @@ def main():
     print("  Audit trail")
     print("=" * 68)
     for row in audit.LOG:
-        print(f"  {row['timestamp']}  {row['advisor_id']}  "
-              f"{row['action']:<20}{row['outcome']:<22}typed={row['advisor_typed']!r}")
+        print(f"  {row['when']}  {row['advisor_id']}  "
+              f"{row['action_name']:<24}{row['result']:<15}typed={row['advisor_typed']!r}")
 
 
 if __name__ == "__main__":

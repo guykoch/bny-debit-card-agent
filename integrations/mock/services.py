@@ -9,6 +9,8 @@ updating; restarting resets everything to what the CSVs say.
 
 from __future__ import annotations
 
+from core.timefmt import us_range
+
 import copy
 import difflib
 from typing import Optional
@@ -161,4 +163,4 @@ class MockCardSystem:
                                     "start_date": start_date, "end_date": end_date})
         return {"status": "travel_notice_added",
                 "message": f"Travel notice added for {', '.join(destination)}, "
-                           f"{start_date} to {end_date}."}
+                           f"{us_range(start_date, end_date)}."}

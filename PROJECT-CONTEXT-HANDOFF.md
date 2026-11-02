@@ -816,6 +816,11 @@ checks, by tracker test ID). Key changes:
   explained (outside the US) or pre-filled. Checks: `tests/test_pending2.py`. No Convex change.
 - Integration note: the demo's `/api/clients/suggest` takes the advisor from the page (the
   advisor dropdown). In the BNY version it must come from the NetX360 sign-in.
+- **US dates and audit logs (F-53, F-54, Nov 2026):** all dates MM/DD/YYYY, times Eastern
+  (`core/timefmt.py`, no time-zone package). Audit split into Convex tables `audit_actions`
+  (actions done or stopped, readable columns plus a technical `record`) and `audit_chat`
+  (every advisor and chat line, written by `a2a_server._log_chat`). The old `audit` table is
+  kept in the schema but no longer written. Checks: `tests/test_audit.py`.
 
 ## 10. Known gaps and inconsistencies (verified against the code — fix only when asked)
 

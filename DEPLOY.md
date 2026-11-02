@@ -7,7 +7,7 @@ everything back to the starting state. Everyone shares the same data.
 | Piece | Service | Where it lives in the repo |
 |---|---|---|
 | Chat page and Python code | Vercel | `app.py` (entry), `web/`, everything else |
-| Data that changes (cards, travel notices, conversations, audit) | Convex project `BNY_Debit_Card_Manager` | `convex-demo-db/` |
+| Data that changes (cards, travel notices, conversations, audit logs) | Convex project `BNY_Debit_Card_Manager` | `convex-demo-db/` |
 | Understanding the requests | OpenAI GPT-5.4 | your key, in Vercel settings |
 | Passcode screen and reset button (demo only) | — | `demo_tools/`, `web/demo-tools.js` |
 
@@ -118,7 +118,17 @@ falls back to the demo list automatically.
   in `convex-demo-db/`, also run `npx convex deploy` from that folder.
 - **Changed a setting in Vercel:** redeploy (Deployments → ⋯ → Redeploy).
 - **See the data:** Convex dashboard → Production → **Data** (tables `cards`,
-  `travel_notices`, `conversations`, `audit`, `defaults`).
+  `addresses`, `travel_notices`, `conversations`, `defaults`, and the two audit logs).
+- **Audit:** two tables that sit next to each other in the Data list:
+  - `audit_actions`: one row per card action, done or stopped (Completed / Refused /
+    Not permitted), with client, card, the details from the confirmation card and the
+    advisor's own words.
+  - `audit_chat`: every line of every conversation (Advisor / NetX AI), in order,
+    including the button the advisor clicked and the card the chat showed.
+  Both start with `when` (MM/DD/YYYY, Eastern time), `advisor_id`, `conversation_id`.
+  To follow one chat: filter `audit_chat` by `conversation_id`, then filter
+  `audit_actions` by the same id. Reset demo data empties both. The old `audit` table
+  is no longer written (Reset empties it too).
 - **Change the starting state:** edit `integrations/mock/data/cards.csv`, push.
   The server notices the change and updates the saved default state; press Reset
   to apply it.

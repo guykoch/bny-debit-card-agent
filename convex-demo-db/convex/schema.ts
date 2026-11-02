@@ -15,7 +15,7 @@ const card = {
 
 const address = {
   client_id: v.string(),
-  label: v.string(), // "Home", "Vacation home", "Delivery (added 24 Oct 2026)"
+  label: v.string(), // "Home", "Vacation home", "Delivery (added 10/24/2026)"
   address: v.string(),
   state: v.string(), // two-letter US state / territory code
   country: v.string(),
@@ -47,7 +47,45 @@ export default defineSchema({
     updated_at: v.number(),
   }).index("by_conversation", ["conversation_id"]),
 
-  // The audit trail (one row per confirmed action or refusal that is logged).
+  // ---------------------------------------------------------------- AUDIT
+  // Two logs side by side (they sort together in the dashboard). Both start with
+  // the same columns - when (US format, Eastern time), advisor_id, conversation_id -
+  // so a conversation can be followed in one log and its actions found in the other.
+
+  // audit_actions: every card action that reached our checks, done or stopped.
+  audit_actions: defineTable({
+    when: v.string(), // "11/02/2026 3:45:12 PM ET"
+    advisor_id: v.string(),
+    conversation_id: v.string(),
+    action_name: v.string(), // "Lock card", "Replace card", ...
+    result: v.string(), // Completed | Refused | Not permitted
+    client: v.string(), // "Jane Miller (C-88210)"
+    card: v.string(), // "...4417"
+    details: v.string(), // what the confirmation card showed: "Reason: Damaged | Deliver to: ..."
+    message: v.string(), // the result or refusal message the advisor saw
+    advisor_request: v.string(), // the advisor's own words
+    at: v.number(), // sort key (milliseconds)
+    record: v.any(), // technical copy: tool name, codes, what the model understood
+  })
+    .index("by_conversation", ["conversation_id", "at"])
+    .index("by_advisor", ["advisor_id", "at"]),
+
+  // audit_chat: every line of every conversation, in order.
+  audit_chat: defineTable({
+    when: v.string(),
+    advisor_id: v.string(),
+    conversation_id: v.string(),
+    speaker: v.string(), // Advisor | NetX AI
+    message: v.string(), // what was typed / clicked, or what the chat showed
+    input: v.string(), // Typed | Button | Form (advisor lines only)
+    card: v.string(), // the card shown, e.g. "Confirmation: Lock debit card"
+    raw_input: v.string(), // the value a button sent, when it differs from its label
+    at: v.number(),
+  })
+    .index("by_conversation", ["conversation_id", "at"])
+    .index("by_advisor", ["advisor_id", "at"]),
+
+  // Old single audit table (before the split). Not written any more; Reset empties it.
   audit: defineTable({ row: v.any(), at: v.number() }),
 
   // THE SAVED DEFAULT STATE. Written from integrations/mock/data/cards.csv and

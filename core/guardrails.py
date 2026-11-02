@@ -52,19 +52,37 @@ def dispatch(services, session: Session, tool_name: str,
         return _read(services, session, tool_name, tool_input)
     except AgentError as e:
         if schemas.load().get(tool_name, {}).get("access") == "write" or e.code == "not_entitled":
-            log_refusal(session, tool_name, tool_input, e)
+            log_refusal(session, tool_name, tool_input, e, services)
         return ToolResponse(status="error", message=e.message,
                             data={"code": e.code})
 
 
-def log_refusal(session, tool_name, tool_input, error: AgentError) -> None:
+def log_refusal(session, tool_name, tool_input, error: AgentError, services=None) -> None:
     """F-07: every refusal is in the audit, not only completed actions."""
     ti = tool_input if isinstance(tool_input, dict) else {}
+    name, last4 = _names(services, ti.get("client_id"), ti.get("card_id"))
     audit.write(session, tool_name, ti.get("client_id"), ti.get("card_id"),
                 outcome="not_entitled" if error.code == "not_entitled" else "refused",
                 model_interpretation=ti or None,
                 detail={"code": error.code, "message": error.message,
-                        "entitlement_checked_by": _checked_by()})
+                        "entitlement_checked_by": _checked_by()},
+                client_name=name, card_last4=last4, message=error.message)
+
+
+def _names(services, client_id, card_id):
+    """Client name and card last four for the audit (never raises)."""
+    name = last4 = None
+    try:
+        if services and card_id:
+            card = services.cards.get_card(card_id)
+            if card:
+                name, last4 = card.client_name, card.card_last4
+        if services and client_id and not name:
+            client = services.clients.get(client_id)
+            name = client.name if client else None
+    except Exception:
+        pass
+    return name, last4
 
 
 def _checked_by() -> str:
@@ -82,7 +100,7 @@ def check_permission(services, session, client_id: str, tool_name: str) -> None:
         return
     if not services.entitlements.can(session.advisor_id, client_id, tool_name):
         e = NotEntitled()
-        log_refusal(session, tool_name, {"client_id": client_id}, e)
+        log_refusal(session, tool_name, {"client_id": client_id}, e, services)
         raise e
 
 
@@ -94,7 +112,7 @@ def check_card_state(services, session, tool_name: str, card) -> None:
             spec.state_check(card)
         except AgentError as e:
             log_refusal(session, tool_name,
-                        {"client_id": card.client_id, "card_id": card.card_id}, e)
+                        {"client_id": card.client_id, "card_id": card.card_id}, e, services)
             raise
 
 
@@ -228,7 +246,11 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
                             card=card_payload,
                             data={"tool": tool_name, "input": ti})
 
-    # 4. action
+    # 4. action (the card's summary is kept first, for the audit)
+    shown, _ = (spec.summary(ti, target, services) if spec.client_level
+                else spec.summary(ti, target))
+    if ti.get("reason") and not any(k == "Reason" for k, _ in shown):
+        shown = list(shown) + [("Reason", ti["reason"])]       # e.g. typed on the close card
     result = spec.execute(services, session, ti, target)
 
     # 5. audit
@@ -238,7 +260,10 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
         detail["advisor_ticked"] = spec.ack
     audit.write(session, tool_name, client_id, card_id,
                 outcome=result.get("status", "ok"), model_interpretation=ti,
-                detail=detail)
+                detail=detail,
+                client_name=getattr(target, "client_name", None) or getattr(target, "name", None),
+                card_last4=getattr(target, "card_last4", None),
+                summary=shown, message=result.get("message"))
 
     card_payload = cards.result_card(spec.title, result["message"])
     return ToolResponse(status="ok", message=result["message"],
