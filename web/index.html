@@ -101,6 +101,23 @@
   .dates .dq { font-weight: 600; color: var(--head); font-size: 13px; margin-bottom: 8px; }
   .dates .row2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
   .dates label { display: flex; flex-direction: column; font-size: 12px; color: var(--hint); gap: 3px; }
+  .dates .dl { display: flex; flex-direction: column; font-size: 12px; color: var(--hint); gap: 3px; }
+  .udbtn { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--white); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-width: 140px; justify-content: space-between; }
+  .udbtn.empty { color: var(--hint); }
+  .udbtn svg { width: 15px; height: 15px; opacity: .7; }
+  .udbtn:disabled { cursor: default; opacity: .6; }
+  .udpop { margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--white);
+    padding: 8px; width: 238px; box-shadow: 0 6px 18px rgba(31,45,74,.12); }
+  .udhead { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--head); font-size: 13px; margin-bottom: 6px; }
+  .udnav { border: 0; background: transparent; font-size: 20px; line-height: 1; cursor: pointer; color: var(--blue); padding: 0 8px; }
+  .udgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .udwd { font-size: 11px; color: var(--hint); padding: 2px 0; }
+  .udday { border: 0; background: transparent; border-radius: 6px; padding: 6px 0; font: inherit; font-size: 13px; cursor: pointer; color: var(--text); }
+  .udday:hover:not(:disabled) { background: var(--blue-tint); }
+  .udday.on { background: var(--blue); color: #fff; font-weight: 600; }
+  .udday:disabled { color: #C3CAD3; cursor: default; }
+  @media (max-width: 600px) { .udbtn { font-size: 16px; } }
   .dates input { font: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border);
     border-radius: 8px; color: var(--text); background: var(--white); }
   .dates .dh { font-size: 11.5px; color: var(--hint); margin-bottom: 8px; }
@@ -216,6 +233,7 @@ const ICONS = {
        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'
        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
 };
 const WELCOME = "Hi, I can help with your clients' debit cards: lock, unlock, replace, close permanently, report lost or stolen, travel notices, and the addresses cards are sent to. Type a request, or tap Actions.";
@@ -325,9 +343,10 @@ function renderClientInput(card) {
 function dateFields(parent, start, end, maxDays) {
   const today = isoLocal(new Date());
   const box = el("div", "dates",
-    `<div class="row2"><label>From<input type="date" class="ds"></label><label>To<input type="date" class="de"></label></div>
+    `<div class="row2"><div class="dl">From<span class="slot-ds"></span></div><div class="dl">To<span class="slot-de"></span></div></div>
      <div class="dh">Up to ${maxDays} days, no past dates.</div>`);
-  const s = box.querySelector(".ds"), e = box.querySelector(".de"), h = box.querySelector(".dh");
+  const s = usDateBox("ds"), e = usDateBox("de"), h = box.querySelector(".dh");
+  box.querySelector(".slot-ds").replaceWith(s); box.querySelector(".slot-de").replaceWith(e);
   s.min = today; e.min = today;
   if (start) s.value = start; if (end) e.value = end;
   function check() {
@@ -403,15 +422,64 @@ function isoLocal(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).p
 function addDays(iso, n) { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return isoLocal(d); }
 function niceDate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }); }   // 11/20/2026
 
+// F-53: our own date field, always MM/DD/YYYY (the browser's date input follows the
+// computer's region, e.g. DD/MM/YYYY). Same interface as <input type="date">:
+// .value / .min / .max are YYYY-MM-DD, and it fires "change".
+function usDateBox(cls) {
+  const w = el("div", "udate " + cls);
+  const btn = el("button", "udbtn"); btn.type = "button";
+  const pop = el("div", "udpop"); pop.style.display = "none";
+  w.appendChild(btn); w.appendChild(pop);
+  let val = "", mn = "", mx = "", view = null;
+  const fmt = iso => iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : "MM/DD/YYYY";
+  const paint = () => { btn.innerHTML = esc(fmt(val)) + ICONS.cal; btn.classList.toggle("empty", !val); };
+  function draw() {
+    pop.innerHTML = "";
+    const head = el("div", "udhead");
+    const prev = el("button", "udnav", "&#8249;"), next = el("button", "udnav", "&#8250;");
+    prev.type = next.type = "button";
+    const title = el("span", null, view.toLocaleDateString("en-US", { month: "long", year: "numeric" }));
+    prev.onclick = () => { view.setMonth(view.getMonth() - 1); draw(); };
+    next.onclick = () => { view.setMonth(view.getMonth() + 1); draw(); };
+    head.append(prev, title, next); pop.appendChild(head);
+    const grid = el("div", "udgrid");
+    "SMTWTFS".split("").forEach(d => grid.appendChild(el("span", "udwd", d)));
+    const first = new Date(view.getFullYear(), view.getMonth(), 1, 12);
+    for (let i = 0; i < first.getDay(); i++) grid.appendChild(el("span"));
+    const days = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      const iso = isoLocal(new Date(view.getFullYear(), view.getMonth(), d, 12));
+      const b = el("button", "udday" + (iso === val ? " on" : ""), String(d)); b.type = "button";
+      b.disabled = (mn && iso < mn) || (mx && iso > mx);
+      b.onclick = () => { val = iso; paint(); pop.style.display = "none"; w.dispatchEvent(new Event("change")); };
+      grid.appendChild(b);
+    }
+    pop.appendChild(grid);
+  }
+  btn.onclick = () => {
+    if (pop.style.display !== "none") { pop.style.display = "none"; return; }
+    const base = val || mn || isoLocal(new Date());
+    view = new Date(+base.slice(0, 4), +base.slice(5, 7) - 1, 1, 12);
+    draw(); pop.style.display = "";
+    pop.scrollIntoView({ block: "nearest" });
+  };
+  Object.defineProperty(w, "value", { get: () => val, set: v => { val = v || ""; paint(); } });
+  Object.defineProperty(w, "min", { get: () => mn, set: v => { mn = v || ""; } });
+  Object.defineProperty(w, "max", { get: () => mx, set: v => { mx = v || ""; } });
+  paint();
+  return w;
+}
+
 function datePicker(cardEl, d) {
   const old = cardEl.querySelector(".dates");
   if (old) { old.remove(); return; }
   const max = d.max_days || 14, today = isoLocal(new Date());
   const box = el("div", "dates",
     `<div class="dq">Pick the travel dates</div>
-     <div class="row2"><label>From<input type="date" class="ds"></label><label>To<input type="date" class="de"></label></div>
+     <div class="row2"><div class="dl">From<span class="slot-ds"></span></div><div class="dl">To<span class="slot-de"></span></div></div>
      <div class="dh">Up to ${max} days, no past dates.</div>`);
-  const s = box.querySelector(".ds"), e = box.querySelector(".de"), h = box.querySelector(".dh");
+  const s = usDateBox("ds"), e = usDateBox("de"), h = box.querySelector(".dh");
+  box.querySelector(".slot-ds").replaceWith(s); box.querySelector(".slot-de").replaceWith(e);
   s.min = today; s.value = d.start && d.start >= today ? d.start : today;
   function sync() {
     if (!s.value || s.value < today) s.value = today;

@@ -63,6 +63,8 @@ def run():
         page = f.read()
     check("T-53a", "chat page shows dates as en-US (no en-GB left)",
           '"en-US"' in page and "en-GB" not in page)
+    check("T-53a", "no browser date fields (they follow the computer's region); own MM/DD/YYYY field",
+          'type="date"' not in page.replace('<input type="date">:', "") and "usDateBox" in page)
 
     print("\nF-54  Audit: two logs (audit_actions, audit_chat)")
     a2a_server.reset_memory()
