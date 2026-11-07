@@ -1,0 +1,50 @@
+{
+  "name": "check_copy",
+  "access": "write",
+  "ticket": true,
+  "description": "Send a Check Copy ticket to the Service Center.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client."
+      },
+      "account_id": {
+        "type": "string",
+        "description": "Account identifier returned by list_accounts."
+      },
+      "draft_id": {
+        "type": "string",
+        "description": "Set by the system; one per review card (no duplicate tickets)."
+      },
+      "subject": {
+        "type": "string",
+        "description": "Subject/Attention."
+      },
+      "additional_info": {
+        "type": "string",
+        "description": "Additional Information (the advisor's own words)."
+      },
+      "callback": {
+        "type": "object",
+        "description": "Call Back #: {kind: US | Non-US, number, ext}."
+      },
+      "attachments": {
+        "type": "array",
+        "description": "Optional files: {storage_id, name, size, type}."
+      },
+      "checks": {
+        "type": "array",
+        "description": "One check: {check_number, amount, date_written}."
+      }
+    },
+    "required": [
+      "client_id",
+      "account_id",
+      "checks",
+      "callback",
+      "draft_id"
+    ]
+  }
+}

@@ -118,11 +118,6 @@ class ConvexCardSystem:
         return {"status": "replacement_ordered", "new_card_id": new_id,
                 "message": f"Replacement ordered, delivering to {delivery_address}.{extra}"}
 
-    def close(self, card_id, advisor_id, reason) -> dict:
-        card = self.client.mutation("setCardStatus", card_id=card_id, status="closed")
-        return {"status": "closed",
-                "message": f"Card ending {card['card_last4']} is closed permanently."}
-
     def report_lost_stolen(self, card_id, advisor_id, incident_type,
                            last_known_use=None, flag_transactions=False) -> dict:
         self.client.mutation("setCardStatus", card_id=card_id, status="locked")
@@ -137,3 +132,40 @@ class ConvexCardSystem:
         return {"status": "travel_notice_added",
                 "message": f"Travel notice added for {', '.join(destination)}, "
                            f"{us_range(start_date, end_date)}."}
+
+
+# ---------------------------------------------------------------- tickets (hosted demo)
+
+class ConvexServiceCenter:
+    """Service Center tickets saved in Convex (`tickets` table). Nothing else changes."""
+    def __init__(self, client: ConvexClient):
+        self.client = client
+
+    def submit(self, ticket: dict) -> dict:
+        return self.client.mutation("addTicket", ticket=ticket)
+
+    def list_for_advisor(self, advisor_id: str) -> list[dict]:
+        return self.client.query("listTickets", advisor_id=advisor_id)
+
+
+class ConvexAdvisorSettings:
+    def __init__(self, client: ConvexClient):
+        self.client = client
+
+    def get(self, advisor_id: str) -> dict:
+        return self.client.query("getAdvisorSettings", advisor_id=advisor_id) or {}
+
+    def set(self, advisor_id: str, key: str, value) -> None:
+        self.client.mutation("setAdvisorSetting", advisor_id=advisor_id, key=key, value=value)
+
+
+class ConvexFileStore:
+    """Attachments in Convex file storage: the browser uploads straight to Convex."""
+    def __init__(self, client: ConvexClient):
+        self.client = client
+
+    def upload_target(self) -> dict:
+        return {"url": self.client.mutation("generateUploadUrl")}
+
+    def meta(self, storage_id: str):
+        return self.client.query("fileMeta", storage_id=storage_id)

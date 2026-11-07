@@ -80,3 +80,52 @@ def explicit_range(text: str, today: date | None = None) -> tuple[str, str] | No
         return _resolve(m1, int(d1), int(y1) if y1 else None, m2, int(d2),
                         int(y2) if y2 else None, today)
     return None
+
+
+_SLASH = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b")
+_ONE_MD = re.compile(rf"\b{_MON}\s+{_DAY}{_YEAR}\b", re.I)
+_ONE_DM = re.compile(rf"\b{_DAY}\s+(?:of\s+)?{_MON}{_YEAR}\b", re.I)
+
+
+def single_date(text: str, today: date | None = None, past: bool = True) -> str | None:
+    """
+    One date the advisor wrote ("10/28/2026", "Oct 28", "28 October 2026") as YYYY-MM-DD.
+    US order for numbers (month first). Without a year: the most recent such date when
+    `past` (e.g. the date a check was written), otherwise the next one.
+    """
+    today = today or date.today()
+    t = (text or "")
+    found = None
+    single_iso = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", t)
+    if single_iso:
+        found = (int(single_iso.group(1)), int(single_iso.group(2)), int(single_iso.group(3)))
+    if not found:
+        m = _SLASH.search(t)
+        if m:
+            y = m.group(3)
+            y = (2000 + int(y) if len(y) == 2 else int(y)) if y else None
+            found = (y, int(m.group(1)), int(m.group(2)))
+    if not found:
+        m = _ONE_MD.search(t)
+        if m:
+            mo, d, y = m.groups()
+            found = (int(y) if y else None, _MONTHS[mo.lower().rstrip(".")[:3]], int(d))
+    if not found:
+        m = _ONE_DM.search(t)
+        if m:
+            d, mo, y = m.groups()
+            found = (int(y) if y else None, _MONTHS[mo.lower().rstrip(".")[:3]], int(d))
+    if not found:
+        return None
+    y, mo, d = found
+    if y is None:
+        cand = _mk(today.year, mo, d)
+        if cand is None:
+            return None
+        if past and cand > today:
+            cand = _mk(today.year - 1, mo, d)
+        elif not past and cand < today:
+            cand = _mk(today.year + 1, mo, d)
+        return cand.isoformat() if cand else None
+    cand = _mk(y, mo, d)
+    return cand.isoformat() if cand else None

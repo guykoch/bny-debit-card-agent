@@ -151,20 +151,18 @@ def run():
           {t["function"]["name"] for t in m.requests[1]["tools"]}
           == {"lock_card", "find_client", "list_cards", "switch_action"})
 
-    print("\n6. 'Cancel her card': code asks lock or close, then switches by itself")
-    m = ScriptedModel(route("close-card"),
-                      call("find_client", query="Jane Miller"),
-                      call("list_cards", client_id="C-88210"),
-                      call("close_card", client_id="C-88210", card_id="CARD-4417"))
+    print("\n6. 'Cancel her card': a card can't be closed alone; Replace or Lock offered")
+    m = ScriptedModel(route("lock-card"))
     svc, conv = fresh(m)
     r = conv.send("Cancel Jane Miller's card")
-    check("lock or close asked with buttons, plus Cancel", r.card and r.card["kind"] == "choice"
-          and [a["value"] for a in r.card["actions"]] == ["lock-card", "close", "__cancel__"])
-    calls_before = len(m.requests)
-    r = conv.send("1")
-    check("typed '1' = lock: the lock panel, no model call",
+    check("close reply with Replace / Lock buttons, plus Cancel, no model call",
+          r.card and r.card["kind"] == "choice" and len(m.requests) == 0
+          and [a["value"] for a in r.card["actions"]] == ["replace-card", "lock-card", "__cancel__"]
+          and "can't be closed on its own" in r.card["message"])
+    r = conv.send("2")
+    check("typed '2' = lock: the lock panel for Jane's card",
           r.status == "awaiting_confirmation" and r.data["tool"] == "lock_card"
-          and len(m.requests) == calls_before)
+          and r.data["input"]["card_id"] == "CARD-4417")
     r = conv.send("cancel")
     check("Cancel: nothing changed", r.message.startswith("Cancelled")
           and svc.cards.get_card("CARD-4417").status == "active")

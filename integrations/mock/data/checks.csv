@@ -1,0 +1,19 @@
+account_id,check_number,amount,date_written,payee,status,posted_date
+ACC-8821,1041,1200.00,2026-10-15,Hudson Property Mgmt,posted,2026-10-18
+ACC-8821,1042,86.40,2026-10-21,Con Edison,posted,2026-10-23
+ACC-8821,1043,250.00,2026-10-28,City Plumbing Co,outstanding,
+ACC-8821,1044,1250.50,2026-11-01,Brightview Landscaping,outstanding,
+ACC-8830,2001,75.00,2026-10-30,Greenwich Library,outstanding,
+ACC-1022,3101,540.00,2026-10-10,Greenwich Country Club,posted,2026-10-14
+ACC-1022,3102,2000.00,2026-10-29,Smith & Sons Builders,outstanding,
+ACC-1029,3201,120.00,2026-10-25,Town of Greenwich,outstanding,
+ACC-1034,4101,310.25,2026-10-27,Lakeshore Dental,outstanding,
+ACC-1034,4102,95.00,2026-10-12,Chicago Tribune,posted,2026-10-16
+ACC-1277,4501,180.00,2026-10-26,Miami Yacht Club,outstanding,
+ACC-1209,4601,650.00,2026-10-20,Wellesley Movers,posted,2026-10-24
+ACC-1158,4701,45.00,2026-10-30,Short Hills Florist,outstanding,
+ACC-1340,5101,400.00,2026-10-22,SF Ballet,outstanding,
+ACC-1411,5201,88.00,2026-10-19,Atlanta Water Dept,posted,2026-10-22
+ACC-1621,6101,725.00,2026-10-11,Boston Roofing,posted,2026-10-15
+ACC-1621,6102,130.00,2026-10-31,Dorchester Pharmacy,outstanding,
+ACC-1687,6201,990.00,2026-10-28,Houston Auto Repair,outstanding,

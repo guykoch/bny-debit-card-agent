@@ -122,9 +122,10 @@ def _check_volume(session, tool_name: str) -> None:
         return
     done = audit.recent_count(session.advisor_id, tool_name, settings.VOLUME_WINDOW_MINUTES)
     if done >= limit:
-        what = {"close_card": "closed {n} cards", "replace_card": "replaced {n} cards",
+        what = {"replace_card": "replaced {n} cards", "stop_payment": "sent {n} stop payments",
+                "check_copy": "requested {n} check copies", "misc_request": "sent {n} requests",
                 "report_lost_stolen": "reported {n} cards lost or stolen",
-                "update_address": "changed {n} addresses"}.get(tool_name, "made {n} changes")
+                "address_update": "sent {n} address updates"}.get(tool_name, "made {n} changes")
         raise NotPossible(
             "volume_limit",
             f"You have {what.format(n=done)} in the last {settings.VOLUME_WINDOW_MINUTES} "
@@ -190,6 +191,24 @@ def _read(services, session, tool_name, ti) -> ToolResponse:
                             message=f"{len(found)} card(s) found.",
                             data={"cards": [c.__dict__ for c in found]})
 
+    if tool_name in ("list_accounts", "find_check"):
+        client_id = ti["client_id"]
+        if (not settings.TRUST_UPSTREAM_ENTITLEMENT
+                and not services.entitlements.can(session.advisor_id, client_id, "view")):
+            raise NotEntitled("You do not have permission to view that account.")
+        accounts = services.checks.accounts(client_id)
+        if tool_name == "list_accounts":
+            return ToolResponse(status="ok", message=f"{len(accounts)} account(s) found.",
+                                data={"accounts": [dict(a.__dict__, label=a.label)
+                                                   for a in accounts]})
+        if ti["account_id"] not in [a.account_id for a in accounts]:
+            raise BadRequest("That account does not belong to this client.")
+        chk = services.checks.find_check(ti["account_id"], ti["check_number"])
+        if chk is None:
+            return ToolResponse(status="error", message=f"Check {ti['check_number']} was not "
+                                "found on this account.", data={"code": "check_not_found"})
+        return ToolResponse(status="ok", message="Check found.", data={"check": chk.__dict__})
+
     raise BadRequest(f"Unknown read tool: {tool_name}")
 
 
@@ -208,7 +227,7 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
             raise NotEntitled()
 
     if spec.client_level:
-        # Acts on the client's profile (update_address): no card involved.
+        # Acts on the client, not a card (Service Center tickets).
         target = services.clients.get(client_id)
         if target is None:
             raise BadRequest("Unknown client.")
@@ -228,6 +247,9 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     # values only the advisor can give on the panel itself (e.g. the reason for closing)
     if confirmed and spec.confirm_check:
         spec.confirm_check(ti)
+    if confirmed and getattr(spec, "ticket", None):
+        from core import tickets
+        tickets.check_attachments(services, ti)
 
     # 3. confirmation
     if not confirmed:
@@ -237,6 +259,13 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
                                           extra_actions=spec.extra_actions, danger=spec.danger,
                                           ack=spec.ack,
                                           text_input=spec.text_input(ti) if spec.text_input else None)
+        if getattr(spec, "ticket", None):
+            from core import tickets
+            card_payload["ticket"] = tickets.review(spec.ticket, ti, target, services)
+            if card_payload["ticket"]["can_edit_details"]:
+                card_payload["actions"].insert(1, {"label": "Edit details",
+                                                   "value": "__edit_details__",
+                                                   "style": "alternative"})
         if tool_name == "travel_notice":
             # the dates are editable on the card itself (date fields, pre-filled)
             card_payload["dates"] = {"start": ti["start_date"], "end": ti["end_date"],

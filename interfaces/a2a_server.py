@@ -21,6 +21,11 @@ Endpoints
     GET  /api/info          which runtime is active, and the demo advisors
     GET  /api/audit         the action log so far (demo only)
     GET  /api/audit/chat    the chat log (?conversation=<id> for one conversation)
+    GET  /api/tickets       this advisor's Service Center tickets (?advisor=<id>; the
+                            Admin menu's Active Tickets - in production the advisor
+                            comes from the NetX360 sign-in)
+    POST /api/tickets/upload-url   where the browser uploads one attachment
+    POST /api/tickets/upload       (local server only) the upload itself
     /api/demo/*             demo-only tools (passcode, reset) - see demo_tools/
 """
 
@@ -123,9 +128,10 @@ def handle(payload: dict) -> dict:
 
 
 _BUTTON_PREFIXES = ("address_pick:", "client_pick:", "travel_form:", "confirm_with:",
-                    "text_input:", "set_dates:")
+                    "text_input:", "set_dates:", "check_form:", "callback_form:",
+                    "ticket_address:", "fields_form:", "__ticket__:")
 _BUTTON_WORDS = {"__cancel__", "__actions__", "__no__", "__other__", "__another__",
-                 "confirm", "confirm_ack", "cancel", "change_dates"}
+                 "confirm", "confirm_ack", "cancel", "change_dates", "__edit_details__"}
 
 
 def _log_chat(session, payload: dict, utterance: str, reply: dict) -> None:
@@ -134,8 +140,7 @@ def _log_chat(session, payload: dict, utterance: str, reply: dict) -> None:
     raw = (utterance or "").strip()
     clicked = bool(display and display != raw) or raw.startswith(_BUTTON_PREFIXES) \
         or raw.lower() in _BUTTON_WORDS
-    kind = "Form" if raw.startswith(("address_pick:", "client_pick:", "travel_form:",
-                                     "confirm_with:", "text_input:", "set_dates:")) \
+    kind = "Form" if raw.startswith(_BUTTON_PREFIXES[:-1]) \
         else ("Button" if clicked else "Typed")
     try:
         audit.chat_turn(session, display or raw, raw, kind, reply)
@@ -229,6 +234,21 @@ def route(method: str, path: str, headers, body: bytes):
         return js(401, {"status": "error", "message": "Passcode required.", "card": None})
     if method == "GET" and path == "/api/audit":
         return js(200, list_audit())
+    if method == "GET" and path == "/api/tickets":
+        advisor = params.get("advisor", "")
+        if advisor not in dataset.GRANTS:
+            return js(400, {"status": "error", "message": "Unknown advisor."})
+        return js(200, {"tickets": services().tickets.list_for_advisor(advisor)})
+    if method == "POST" and path == "/api/tickets/upload-url":
+        return js(200, services().files.upload_target())
+    if method == "POST" and path == "/api/tickets/upload":
+        store = services().files
+        if not hasattr(store, "put"):
+            return js(404, {"status": "error", "message": "Not found."})
+        kind = (headers.get("Content-Type") or "").split(";")[0].strip()
+        if len(body) > 10 * 1024 * 1024:
+            return js(400, {"status": "error", "message": "Files can be at most 10 MB."})
+        return js(200, {"storageId": store.put(body, kind)})
     if method == "GET" and path == "/api/audit/chat":
         return js(200, list_chat(params.get("conversation", "")))
     if method == "GET" and path == "/api/places/suggest":

@@ -39,8 +39,10 @@ name to an id, and has decided this request belongs to the debit card agent.
 ## Out of scope
 
 PIN resets and PIN changes (only the cardholder can do that), balances,
-transactions, statements, transfers, checks, ACH, account-level
-address changes, opening or closing accounts. Say that this covers debit card
+transactions, statements, transfers, ACH, opening or closing accounts.
+Checks (stop a payment, a check copy, a check look-up), address changes and
+other checking requests are Service Center tickets, handled by the
+`skills/service-center/` skills. Say that this covers debit card
 actions only, and suggest the normal screens.
 
 ## Finding the client
@@ -71,8 +73,7 @@ Restate the action in one line, then wait:
 
 In the chat this restatement is the confirmation panel: calling the action
 tool shows it, listing every field with Confirm and Cancel, and nothing runs
-until the advisor clicks Confirm. Do not also ask in text. `close-card` has a
-stricter rule of its own.
+until the advisor clicks Confirm. Do not also ask in text.
 
 ## After acting
 
@@ -95,7 +96,7 @@ see succeed.
 
 Every question goes to the advisor as a card built by the system: which
 client, which card, reason, lost or stolen, delivery address, places and
-dates, lock or close. **Never ask in text and never list options in text.**
+dates. **Never ask in text and never list options in text.**
 Your text replies are not shown; if something is missing, simply stop and the
 system asks with a card. Every card has a Cancel button.
 

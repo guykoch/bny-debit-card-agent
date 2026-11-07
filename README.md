@@ -1,8 +1,16 @@
 # Debit Card Management Agent
 
 A chat-driven way for a NetX360 advisor to manage a client's Corestone debit
-card. Six actions: lock, unlock, replace, close permanently, report lost or
-stolen, travel notice.
+card and send Service Center tickets.
+
+- **Do it now** (changes the card): lock, unlock, replace, report lost or stolen,
+  travel notice.
+- **Send a ticket** (saves a request for the Service Center, nothing else
+  changes): Stop Payment, Check Copy, Address Update, Misc. Plus a read-only
+  check look-up ("Did check 1043 clear?").
+
+A card is never closed on its own: a close request gets a fixed reply with
+Replace / Lock buttons.
 
 Built as **a skill with a guardrail layer**, not a standalone agent, and shaped
 so the agent version can be added later without rewriting any of it.
@@ -27,7 +35,7 @@ You need Python 3.10 or newer and an OpenAI API key. Nothing to install.
 3. **Open http://localhost:8080** in a browser and type, for example:
    - *Can you freeze Robert Castellano's card?* (two cards: it asks which)
    - *Jane Miller is off to Georgia next month for a couple of weeks*
-   - *Jane lost her wallet*  ·  *Cancel Jane Miller's card*  ·  *Unlock Sarah Chen's card*
+   - *Jane lost her wallet*  ·  *Stop payment on Jane Miller's check 1043*  ·  *Unlock Sarah Chen's card*
    - *What's Jane's balance?* (not one of the six actions: a fixed reply)
 4. Switch advisor in the header to show that ADV-5678 cannot see Jane Miller.
    Restart the server to reset the mock cards. `http://localhost:8080/api/audit`

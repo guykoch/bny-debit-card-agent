@@ -111,60 +111,33 @@ def run():
                                                "end": iso(start + timedelta(days=9))}))
     check("T-33a", "fixed on the card: confirmation", r.status == "awaiting_confirmation")
 
-    print("\nP-05 (F-34)  Pending card with no US address: offer to add one")
+    print("\nP-05 (F-34)  Pending card with no US address: an Address Update ticket")
     svc, conv = fresh(CodeOnly(), "ADV-5678")
     r = conv.send("Claire Beaumont never received her card, please replace it")
-    check("T-34a", "'Add a US delivery address' button, not a refusal",
-          r.status == "needs_input" and labels(r) == ["Add a US delivery address"]
+    check("T-34a", "'Send an Address Update ticket' button, not a refusal",
+          r.status == "needs_input" and labels(r) == ["Send an Address Update ticket"]
           and has_cancel(r))
     r = conv.send("__other__")
-    check("T-34a", "the address search opens", kind(r) == "address_input")
+    check("T-34a", "the ticket's address card opens", kind(r) == "ticket_address")
     hits = address_lookup.suggest("1100 Congress")["suggestions"]
-    r = conv.send(f"address_pick:{hits[0]['id']}|")
-    r = conv.send("confirm_ack")
-    check("T-34a", "address added, then the replacement card to it",
-          r.status == "awaiting_confirmation" and r.data["tool"] == "replace_card"
-          and r.data["input"]["delivery_address"].startswith("1100 Congress"))
+    r = conv.send("ticket_address:" + json.dumps({"pick": hits[0]["id"], "unit": "", "phone": ""}))
+    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
+    check("T-34a", "review card for the ticket; nothing on file changed",
+          r.status == "awaiting_confirmation" and r.data["tool"] == "address_update"
+          and not any("Congress" in a.address for a in svc.clients.addresses("C-15644")))
     svc, conv = fresh(CodeOnly(), "ADV-5678")
     r = conv.send("Report Claire Beaumont's card stolen")
     check("T-34b", "pending card, action not allowed: what IS allowed, as buttons",
           r.data.get("code") == "card_pending" and "Replace the card" in labels(r)
           and has_cancel(r))
 
-    print("\nP-06 (F-35)  Close: required, editable Reason box on the card")
+    print("\nP-06 / P-07 (F-35 / F-36 retired)  Close removed: a card can't be closed alone")
     svc, conv = fresh(CodeOnly())
     r = conv.send("Close Jane Miller's card permanently")
-    ti = (r.card or {}).get("text_input") or {}
-    check("T-35a", "red card with an empty required Reason box",
-          r.status == "awaiting_confirmation" and r.card["danger"] and ti.get("required")
-          and ti.get("value") == "")
-    r = conv.send("confirm_with:" + json.dumps({"reason": "permanently"}))
-    check("T-35a", "'permanently' is not a reason: card stays open, nothing closed",
-          r.status == "needs_input" and "not a reason" in r.message
+    check("T-35c", "close: fixed reply, Replace / Lock buttons, nothing changed",
+          "can't be closed on its own" in r.card["message"]
+          and values(r) == ["replace-card", "lock-card"] and has_cancel(r)
           and svc.cards.get_card("CARD-4417").status == "active")
-    r = conv.send("confirm_with:" + json.dumps({"reason": "Client is switching banks"}))
-    check("T-35a", "a real reason: closed, reason in the audit",
-          r.status == "ok" and svc.cards.get_card("CARD-4417").status == "closed"
-          and "switching banks" in json.dumps(audit.LOG[-1]))
-    m = ScriptedModel(route("close-card"), call("find_client", query="Jane Miller"),
-                      call("list_cards", client_id="C-88210"),
-                      call("close_card", client_id="C-88210", card_id="CARD-4417",
-                           reason="client request"))
-    svc, conv = fresh(m)
-    r = conv.send("Close Jane Miller's card permanently because she is moving abroad")
-    check("T-35b", "the reason the advisor wrote is filled in, editable; the model's is not",
-          r.card["text_input"]["value"] == "she is moving abroad")
-
-    print("\nP-07 (F-36)  Close never restated in text")
-    svc, conv = fresh(CodeOnly())
-    r = conv.send("Close Jane Miller's card for good")
-    check("T-36a", "the model's 'Confirm?' text is not shown; the red card is",
-          kind(r) == "confirm" and r.card["danger"] and "Confirm?" not in r.message)
-    svc, conv = fresh(ScriptedModel(route("close-card"), {"role": "assistant",
-                                                          "content": "Lock or close?"}))
-    r = conv.send("Cancel Jane Miller's card")
-    check("T-36b", "'cancel' alone: Lock or Close asked with buttons",
-          values(r) == ["lock-card", "close"] and has_cancel(r))
 
     print("\nP-08 (F-37)  'Did you do anything?' answered by code")
     svc, conv = fresh(CodeOnly())
@@ -265,7 +238,9 @@ def run():
     svc, conv = fresh(CodeOnly())
     calls = 0
     r = conv.send("__actions__")
-    check("T-45a", "seven actions plus Cancel", len(labels(r)) == 7 and has_cancel(r))
+    check("T-45a", "nine actions in two groups (Do it now / Send a ticket), plus Cancel",
+          len(labels(r)) == 9 and has_cancel(r)
+          and [a.get("group") for a in r.card["actions"][:9]] == ["now"] * 5 + ["ticket"] * 4)
     r = conv.send("unlock-card")
     check("T-45a", "then 'Which client?' with suggestions", kind(r) == "client_input")
     r = conv.send("client_pick:C-44090")

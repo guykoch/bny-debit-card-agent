@@ -1,0 +1,65 @@
+{
+  "title": "Misc. AMA/Res. Checking Issues",
+  "menu_label": "Other request (Misc)",
+  "skill": "misc-request",
+  "category": "AMA/Resource Checking",
+  "request": "Misc. AMA/Res. Checking Issues",
+  "request_type": "AMA/Resource Checking Account",
+  "note": "",
+  "fields": [
+    {
+      "id": "account_id",
+      "label": "Account #",
+      "required": true,
+      "type": "account",
+      "alternative": [
+        "ibd",
+        "office",
+        "ip"
+      ]
+    },
+    {
+      "id": "ibd",
+      "label": "IBD #",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "office",
+      "label": "Office #",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "ip",
+      "label": "IP #",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "subject",
+      "label": "Subject/Attention",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "additional_info",
+      "label": "Additional Information",
+      "required": true,
+      "type": "long_text"
+    },
+    {
+      "id": "callback",
+      "label": "Call Back #",
+      "required": true,
+      "type": "callback"
+    }
+  ],
+  "ask_order": [
+    "account_id",
+    "subject",
+    "callback"
+  ],
+  "tool": "misc_request",
+  "common_note": "Please be advised, DO NOT key out a checking account number or debit card number on your Service Center requests."
+}

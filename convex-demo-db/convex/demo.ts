@@ -276,6 +276,108 @@ export const listChat = query({
   },
 });
 
+// ------------------------------------------------------------------ tickets
+
+export const addTicket = mutation({
+  args: { secret: v.string(), ticket: v.any() },
+  handler: async (ctx, { secret, ticket }) => {
+    checkSecret(secret);
+    const str = (x: unknown) => (x === null || x === undefined ? "" : String(x));
+    const same = await ctx.db
+      .query("tickets")
+      .withIndex("by_draft", (q) => q.eq("draft_id", str(ticket.draft_id)))
+      .first();
+    if (same) return { ...plain(same), duplicate: true };
+    const count = (await ctx.db.query("tickets").collect()).length;
+    const doc = {
+      ticket_id: `SR-${10234 + count}`,
+      draft_id: str(ticket.draft_id),
+      status: "Submitted",
+      advisor_id: str(ticket.advisor_id),
+      conversation_id: str(ticket.conversation_id),
+      tool: str(ticket.tool),
+      ticket: str(ticket.ticket),
+      category: str(ticket.category),
+      request: str(ticket.request),
+      request_type: str(ticket.request_type),
+      client_id: str(ticket.client_id),
+      client_name: str(ticket.client_name),
+      account: str(ticket.account),
+      fields: (ticket.fields ?? []).map((f: { label: unknown; value: unknown }) => ({
+        label: str(f.label),
+        value: str(f.value),
+      })),
+      attachments: ticket.attachments ?? [],
+      when: str(ticket.when),
+      at: typeof ticket.at === "number" ? ticket.at : Date.now(),
+    };
+    await ctx.db.insert("tickets", doc);
+    return doc;
+  },
+});
+
+export const listTickets = query({
+  args: { secret: v.string(), advisor_id: v.string() },
+  handler: async (ctx, { secret, advisor_id }) => {
+    checkSecret(secret);
+    const docs = await ctx.db
+      .query("tickets")
+      .withIndex("by_advisor", (q) => q.eq("advisor_id", advisor_id))
+      .order("desc")
+      .take(200);
+    return docs.map(plain);
+  },
+});
+
+export const getAdvisorSettings = query({
+  args: { secret: v.string(), advisor_id: v.string() },
+  handler: async (ctx, { secret, advisor_id }) => {
+    checkSecret(secret);
+    const doc = await ctx.db
+      .query("advisor_settings")
+      .withIndex("by_advisor", (q) => q.eq("advisor_id", advisor_id))
+      .first();
+    return doc ? doc.settings : {};
+  },
+});
+
+export const setAdvisorSetting = mutation({
+  args: { secret: v.string(), advisor_id: v.string(), key: v.string(), value: v.any() },
+  handler: async (ctx, { secret, advisor_id, key, value }) => {
+    checkSecret(secret);
+    const doc = await ctx.db
+      .query("advisor_settings")
+      .withIndex("by_advisor", (q) => q.eq("advisor_id", advisor_id))
+      .first();
+    if (doc) {
+      await ctx.db.patch(doc._id, { settings: { ...(doc.settings ?? {}), [key]: value } });
+    } else {
+      await ctx.db.insert("advisor_settings", { advisor_id, settings: { [key]: value } });
+    }
+    return null;
+  },
+});
+
+// Ticket attachments: the browser uploads straight to Convex file storage.
+export const generateUploadUrl = mutation({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkSecret(secret);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const fileMeta = query({
+  args: { secret: v.string(), storage_id: v.string() },
+  handler: async (ctx, { secret, storage_id }) => {
+    checkSecret(secret);
+    const id = ctx.db.system.normalizeId("_storage", storage_id);
+    if (!id) return null;
+    const doc = await ctx.db.system.get(id);
+    return doc ? { size: doc.size, contentType: doc.contentType ?? "" } : null;
+  },
+});
+
 // ------------------------------------------------------------------ default state and reset
 
 // Called by the server on start-up. Saves the default cards (from cards.csv)
@@ -327,8 +429,16 @@ export const reset = mutation({
       .first();
     if (!saved) throw new Error("No saved default state yet. Start the server once first.");
     const counts: Record<string, number> = {};
+    // Attached files go with their tickets.
+    for (const t of await ctx.db.query("tickets").collect()) {
+      for (const a of t.attachments ?? []) {
+        const id = ctx.db.system.normalizeId("_storage", String(a.storage_id ?? ""));
+        if (id) await ctx.storage.delete(id);
+      }
+    }
     for (const table of ["cards", "addresses", "travel_notices", "flags", "conversations",
-                       "audit_actions", "audit_chat", "audit"] as const) {
+                       "audit_actions", "audit_chat", "audit", "tickets",
+                       "advisor_settings"] as const) {
       const docs = await ctx.db.query(table).collect();
       for (const d of docs) await ctx.db.delete(d._id);
       counts[table] = docs.length;

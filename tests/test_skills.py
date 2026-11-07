@@ -38,7 +38,7 @@ def run():
     print("\n2. Exactly one skill per action, and no action left out")
     claimed = [sk.tool for sk in all_skills]
     check("no tool claimed twice", len(claimed) == len(set(claimed)))
-    check("every write tool has a skill", write_tools == set(claimed),
+    check("every write tool has a skill", write_tools <= set(claimed),
           f"missing: {sorted(write_tools - set(claimed))}")
 
     print("\n3. A skill may only reach its own action")
@@ -52,7 +52,7 @@ def run():
         ("Lock Jane Miller's card", "lock-card"),
         ("unlock the card please", "unlock-card"),
         ("her card is cracked, send a new one", "replace-card"),
-        ("close it permanently", "close-card"),
+        ("stop payment on check 1043", "stop-payment"),
         ("Jane lost her wallet, lock the card", "report-lost-stolen"),
         ("Sarah is going to Portugal next month", "travel-notice"),
     ]

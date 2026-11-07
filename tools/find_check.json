@@ -1,0 +1,27 @@
+{
+  "name": "find_check",
+  "access": "read",
+  "description": "Look up one check on an account: amount, date written, status (outstanding / posted / stopped).",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client."
+      },
+      "account_id": {
+        "type": "string",
+        "description": "Account identifier returned by list_accounts."
+      },
+      "check_number": {
+        "type": "string",
+        "description": "The check number."
+      }
+    },
+    "required": [
+      "client_id",
+      "account_id",
+      "check_number"
+    ]
+  }
+}

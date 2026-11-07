@@ -886,3 +886,32 @@ GPT-5.4 mode does not use any of this.
 - Slides: match the house style of the deck he points to; render and visually check every slide before delivering; fix overflow and overlaps.
 - When proposing names or wording, give a recommended pick plus a few alternatives, briefly.
 - When a deck example uses data, use the mock data in §5.7 so it matches the code.
+
+---
+
+## Update, November 7 2026: Service Center tickets (read this first; it overrides older sections)
+
+- **Close was removed.** A close request gets a fixed reply (a debit card can't be
+  closed on its own; replacing it closes the old card) with Replace / Lock buttons.
+  Older sections that mention `close_card`, `close-card`, a red close card or a
+  close reason are history.
+- **Address change is a ticket.** `update_address` / `update-address` were removed;
+  the profile is never changed by the chat. "A different address (ticket)" in a
+  replacement starts an Address Update ticket.
+- **Two kinds of features.** Do it now (lock, unlock, replace, report lost/stolen,
+  travel notice) change the card. Send a ticket (Stop Payment, Check Copy, Address
+  Update, Misc) only save a ticket in `tickets` (SR-10234 onwards). Plus a read-only
+  check look-up (`find_check`).
+- **Where:** forms in `tickets/*.json`; logic in `core/tickets.py` (ActionSpecs, same
+  guardrails: permission, account ownership, volume, audit, idempotent by draft_id);
+  skills in `skills/service-center/`; the code-driven flow in `interfaces/llm_runtime.py`
+  (`_ticket_*`, `_check_status`); mock data `accounts.csv`, `checks.csv`; services
+  `checks`, `tickets`, `advisor_settings`, `files` (memory and Convex).
+- **Page:** Actions menu in two sections; Admin menu (Advisor ID + Active Tickets);
+  ticket cards (check rows, Call Back #, new address, boxes, check status) and the short
+  review card with Show all fields and + Attach file (PDF/JPG/PNG, 10 MB, max 5, Convex
+  file storage, never sent to the AI).
+- **Convex:** new tables `tickets`, `advisor_settings`, functions `addTicket`,
+  `listTickets`, `getAdvisorSettings`, `setAdvisorSetting`, `generateUploadUrl`,
+  `fileMeta`. Needs `npx convex deploy`.
+- **Tests:** 11 suites, 351 checks, all passing (`tests/test_tickets.py` is new).

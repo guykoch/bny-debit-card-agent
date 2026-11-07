@@ -1,5 +1,5 @@
 """
-Checks the address feature (update an address / add a delivery address) and the
+Checks the address feature (the Address Update ticket) and the
 address search (autofill). Run:
 
     python -m tests.test_addresses
@@ -40,130 +40,36 @@ def pick_id(text):
 def run():
     settings.ADDRESS_PROVIDER = "sample"
 
-    print("\nF-28  Update address: change an address in the profile")
-    m = ScriptedModel(route("update-address"), call("find_client", query="Jane Miller"),
-                      call("update_address", client_id="C-88210"))
-    svc, conv = fresh(m)
+    print("\nF-28 (now F-56)  Address change is an Address Update ticket; the profile is not changed")
+    from tests.test_pending import CodeOnly
+    svc, conv = fresh(CodeOnly())
+    before = [a.address for a in svc.clients.addresses("C-88210")]
     r = conv.send("Jane Miller moved, update her address")
-    check("T-28a", "asks what to do, as buttons",
-          values(r) == ["change_profile_address", "add_delivery_address"])
-    r = conv.send("change_profile_address")
-    check("T-28a", "more than one address: asks which one",
-          r.card["title"] == "Which address?" and values(r) == ["Home", "Vacation home"])
-    r = conv.send("Home")
-    check("T-28a", "then the address search field", r.card["kind"] == "address_input"
-          and "14 Hudson St" in r.card["message"])
-    calls = len(m.requests)
-    r = conv.send(f"address_pick:{pick_id('1 Bryant Park')}|Apt 12C")
-    check("T-28a", "picked address + apt on a red panel with a tick box",
-          r.status == "awaiting_confirmation" and r.card["danger"] and r.card["ack"]
-          and r.data["input"]["new_address"] == "1 Bryant Park, Apt 12C, New York, NY 10036")
-    check("T-28a", "no model call for the buttons or the pick", len(m.requests) == calls)
+    check("T-28a", "the ticket's address card (search, apartment line, phone)",
+          r.card["kind"] == "ticket_address" and r.card["title"] == "New address")
+    conv.send("ticket_address:" + json.dumps({"pick": pick_id("1 Bryant Park"), "unit": "Apt 12C",
+                                               "phone": ""}))
+    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
+    check("T-28a", "review card: Address Update, the new address with the unit",
+          r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Address Update"
+          and "Apt 12C" in json.dumps(r.card["ticket"]))
     r = conv.send("confirm")
-    check("T-28a", "Confirm without the tick is refused",
-          r.status == "needs_input" and "tick the box" in r.message
-          and svc.clients.addresses("C-88210")[0].address.startswith("14 Hudson"))
-    r = conv.send("confirm_ack")
-    check("T-28a", "ticked + Confirm: the Home address changed",
-          r.status == "ok" and svc.clients.addresses("C-88210")[0].address.startswith("1 Bryant Park"))
-    from core import audit
-    check("T-28a", "audited with the tick", audit.LOG[-1]["action"] == "update_address"
-          and audit.LOG[-1]["detail"].get("advisor_ticked"))
-
-    m = ScriptedModel(route("update-address"), call("find_client", query="Hiroshi Tanaka"),
-                      call("update_address", client_id="C-13402", mode="change_profile_address"))
-    svc, conv = fresh(m, "ADV-5678")
-    r = conv.send("Change the address in Hiroshi Tanaka's profile")
-    check("T-28b", "one address: no 'which one' question, straight to the search",
-          r.card["kind"] == "address_input" and "18 Kearny St" in r.card["message"])
-
-    print("\nF-28  Update address: add a delivery address, then offer a replacement")
-    m = ScriptedModel(route("update-address"), call("find_client", query="Jane Miller"),
-                      call("update_address", client_id="C-88210", mode="add_delivery_address"))
-    svc, conv = fresh(m)
-    r = conv.send("Add a delivery address for Jane Miller")
-    check("T-28c", "mode given: straight to the search", r.card["kind"] == "address_input")
-    conv.send(f"address_pick:{pick_id('233 S Wacker')}|")
-    r = conv.send("confirm_ack")
-    check("T-28c", "added to the profile, then 'order a replacement?' Yes / No",
-          any(a.address.startswith("233 S Wacker") for a in svc.clients.addresses("C-88210"))
-          and labels(r) == ["Yes, order a replacement", "No, thanks"])
-
-    print("\nF-28  Replacement -> A different address -> add it -> back to the replacement")
-    m = ScriptedModel(route("replace-card"), call("find_client", query="Jane Miller"),
-                      call("list_cards", client_id="C-88210"),
-                      call("replace_card", client_id="C-88210", card_id="CARD-4417",
-                           reason="damaged"))
-    svc, conv = fresh(m)
-    conv.send("Jane Miller's card is cracked, send her a new one")
-    r = conv.send("A different address")
-    check("T-28d", "address search opens", r.card["kind"] == "address_input")
-    r = conv.send(f"address_pick:{pick_id('1100 Congress')}|")
-    check("T-28d", "panel to add the address (red, tick box)",
-          r.data["input"]["mode"] == "add_delivery_address" and r.card["ack"])
-    r = conv.send("confirm_ack")
-    check("T-28d", "then the replacement panel to that address, with a green note",
-          r.status == "awaiting_confirmation" and r.data["tool"] == "replace_card"
-          and r.data["input"]["delivery_address"] == "1100 Congress Ave, Austin, TX 78701"
-          and "Delivery address added" in r.card.get("note", ""))
-    r = conv.send("confirm")
-    check("T-28d", "replacement ordered to the new address",
-          r.status == "ok" and "1100 Congress Ave" in r.message)
-
-    print("\nF-28  The same flow with save/restore between every message (as on Vercel)")
-    from interfaces.llm_runtime import GptConversation
-    from core.models import Session
-    m = ScriptedModel(route("replace-card"), call("find_client", query="Jane Miller"),
-                      call("list_cards", client_id="C-88210"),
-                      call("replace_card", client_id="C-88210", card_id="CARD-4417",
-                           reason="damaged"))
-    svc, conv = fresh(m)
-
-    def hop(text):
-        nonlocal conv
-        r = conv.send(text)
-        state = json.loads(json.dumps(conv.snapshot()))          # what Convex stores
-        conv = GptConversation(svc, Session(advisor_id="ADV-1234", conversation_id="t"), client=m)
-        conv.restore(state)
-        return r
-
-    hop("Jane Miller's card is cracked, send her a new one")
-    hop("A different address")
-    hop(f"address_pick:{pick_id('1100 Congress')}|")
-    r = hop("confirm_ack")
-    check("T-28h", "after save/restore: back to the replacement panel, no extra model call",
-          r.status == "awaiting_confirmation" and r.data["tool"] == "replace_card"
-          and len(m.queue) == 0)
-    r = hop("confirm")
-    check("T-28h", "replacement ordered", r.status == "ok")
+    check("T-28a", "Send saves a ticket; nothing in the profile changed",
+          r.status == "ok" and r.data["ticket_id"].startswith("SR-")
+          and [a.address for a in svc.clients.addresses("C-88210")] == before)
+    r = conv.send("Change Hiroshi Tanaka's address")
+    check("T-28b", "another advisor's client is not found", r.card["kind"] == "client_input")
 
     print("\nF-28  Guardrails")
-    m = ScriptedModel(route("update-address"), call("find_client", query="Margaret Osei-Bonsu"))
-    _, conv = fresh(m)
-    r = conv.send("Update Margaret Osei-Bonsu's address")
-    check("T-28e", "no permission: refused right away", r.data.get("code") == "not_entitled")
-
-    m = ScriptedModel(route("update-address"), call("find_client", query="Jane Miller"),
-                      call("update_address", client_id="C-88210", mode="add_delivery_address",
-                           new_address="10 Downing St, London", new_state="", new_country="GB"))
-    _, conv = fresh(m)
-    r = conv.send("Add 10 Downing St, London as Jane Miller's delivery address")
-    check("T-28f", "an address the model typed is ignored: the search opens instead",
-          r.card["kind"] == "address_input")
-    orig = address_lookup.details
-    address_lookup.details = lambda pid, session="": {"address": "12 Rue de Rivoli, Paris",
-                                                     "state": "", "country": "FR"}
-    try:
-        r = conv.send("address_pick:ChIJfake123|")
-    finally:
-        address_lookup.details = orig
-    check("T-28f", "a picked address outside the US is refused, search stays open",
-          "United States" in r.message and r.card["kind"] == "address_input")
-    r = conv.send("500 Elm St Austin")
-    check("T-28g", "an address typed in the chat becomes suggestion buttons",
-          r.card["kind"] == "choice" and values(r)[0].startswith("address_pick:"))
-    r = conv.send(values(r)[0])
-    check("T-28g", "picking one continues to the panel", r.status == "awaiting_confirmation")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Margaret Osei-Bonsu moved, change her address")
+    check("T-28d", "no permission: refused before the address is asked",
+          r.data.get("code") == "not_entitled")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Jane Miller moved, change her address")
+    r = conv.send("ticket_address:" + json.dumps({"pick": "", "unit": "", "phone": ""}))
+    check("T-28e", "neither address nor phone: asked again",
+          r.card["kind"] == "ticket_address" and r.status == "needs_input")
 
     print("\nF-29  Address search (autofill) service")
     out = address_lookup.suggest("hudson st new york")

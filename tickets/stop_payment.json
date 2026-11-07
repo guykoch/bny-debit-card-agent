@@ -1,0 +1,66 @@
+{
+  "title": "Stop Payment",
+  "menu_label": "Stop a payment",
+  "skill": "stop-payment",
+  "category": "AMA/Resource Checking",
+  "request": "Stop Payment",
+  "request_type": "AMA/Resource Checking Account",
+  "note": "Once the stop payment request has been processed, be advised that there is a 24 hour window in which the check may come through for payment and still be approved.",
+  "fields": [
+    {
+      "id": "account_id",
+      "label": "Account #",
+      "required": true,
+      "type": "account"
+    },
+    {
+      "id": "subject",
+      "label": "Subject/Attention",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "checks",
+      "label": "Checks",
+      "required": true,
+      "type": "check_rows",
+      "columns": [
+        {
+          "id": "check_number",
+          "label": "Check #",
+          "required": true
+        },
+        {
+          "id": "amount",
+          "label": "Amount",
+          "required": true
+        },
+        {
+          "id": "date_written",
+          "label": "Date Written",
+          "required": false
+        }
+      ],
+      "max_rows": 10
+    },
+    {
+      "id": "additional_info",
+      "label": "Additional Information",
+      "required": false,
+      "type": "long_text"
+    },
+    {
+      "id": "callback",
+      "label": "Call Back #",
+      "required": true,
+      "type": "callback"
+    }
+  ],
+  "ask_order": [
+    "account_id",
+    "checks",
+    "callback"
+  ],
+  "tool": "stop_payment",
+  "common_note": "Please be advised, DO NOT key out a checking account number or debit card number on your Service Center requests."
+}

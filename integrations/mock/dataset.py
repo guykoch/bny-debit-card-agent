@@ -15,8 +15,10 @@ import os
 
 _DIR = os.path.join(os.path.dirname(__file__), "data")
 
-ALL_ACTIONS = {"view", "lock_card", "unlock_card", "replace_card", "close_card",
-               "report_lost_stolen", "travel_notice", "update_address"}
+# "Do it now" card actions, then the Service Center tickets.
+ALL_ACTIONS = {"view", "lock_card", "unlock_card", "replace_card",
+               "report_lost_stolen", "travel_notice",
+               "stop_payment", "check_copy", "address_update", "misc_request"}
 
 
 def _rows(filename: str) -> list[dict]:
@@ -63,6 +65,8 @@ def _load_grants() -> dict[str, dict[str, set]]:
 
 
 CLIENTS = _load_clients()
+ACCOUNTS = _rows("accounts.csv")      # read-only demo data: AMA / Resource Checking accounts
+CHECKS = _rows("checks.csv")          # read-only demo data: checks written on those accounts
 CARDS = _load_cards()
 ADDRESSES = _load_addresses()
 GRANTS = _load_grants()

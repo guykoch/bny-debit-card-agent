@@ -25,7 +25,7 @@ export default defineSchema({
   // Each client's profile addresses. Replacement cards may only go to these.
   addresses: defineTable(address).index("by_client", ["client_id"]),
 
-  // The live cards. Changed by lock, unlock, replace, close, report lost/stolen.
+  // The live cards. Changed by lock, unlock, replace, report lost/stolen.
   cards: defineTable(card)
     .index("by_card", ["card_id"])
     .index("by_client", ["client_id"]),
@@ -84,6 +84,37 @@ export default defineSchema({
   })
     .index("by_conversation", ["conversation_id", "at"])
     .index("by_advisor", ["advisor_id", "at"]),
+
+  // ---------------------------------------------------------------- SERVICE CENTER TICKETS
+  // One row per ticket sent from the chat (Stop Payment, Check Copy, Address Update,
+  // Misc). Sending a ticket changes nothing else; BNY's Service Center would process it.
+  tickets: defineTable({
+    ticket_id: v.string(), // "SR-10234"
+    draft_id: v.string(), // one per review card: the same Send twice saves one ticket
+    status: v.string(), // Submitted
+    advisor_id: v.string(),
+    conversation_id: v.string(),
+    tool: v.string(), // stop_payment | check_copy | address_update | misc_request
+    ticket: v.string(), // "Stop Payment"
+    category: v.string(),
+    request: v.string(),
+    request_type: v.string(),
+    client_id: v.string(),
+    client_name: v.string(),
+    account: v.string(), // "AMA ...8821"
+    fields: v.array(v.object({ label: v.string(), value: v.string() })),
+    attachments: v.array(v.any()), // {storage_id, name, size, type}
+    when: v.string(), // "11/07/2026 3:45:12 PM ET"
+    at: v.number(),
+  })
+    .index("by_advisor", ["advisor_id", "at"])
+    .index("by_draft", ["draft_id"]),
+
+  // Small per-advisor preferences, e.g. the saved Call Back # for tickets.
+  advisor_settings: defineTable({ advisor_id: v.string(), settings: v.any() }).index(
+    "by_advisor",
+    ["advisor_id"],
+  ),
 
   // Old single audit table (before the split). Not written any more; Reset empties it.
   audit: defineTable({ row: v.any(), at: v.number() }),

@@ -69,8 +69,8 @@ def run():
           kind(r) == "choice" and r.card["message"].startswith("Is this for Claire Beaumont")
           and labels(r) == ["Yes, Claire Beaumont", "Another client"] and has_cancel(r))
     r = conv.send("Yes, Claire Beaumont")
-    check("T-48a", "Yes: the replacement goes on (no US address -> add one)",
-          labels(r) == ["Add a US delivery address"])
+    check("T-48a", "Yes: the replacement goes on (no US address -> Address Update ticket)",
+          labels(r) == ["Send an Address Update ticket"])
     _, conv = fresh(CodeOnly(), "ADV-5678")
     conv.send("Claire Beaumont's card was stolen")
     conv.send("So she never actually got the card and needs a replacement")
@@ -87,12 +87,12 @@ def run():
     print("\nP2-03 (F-49)  Apartment line after picking an address (page; server check)")
     from integrations import address_lookup
     _, conv = fresh(CodeOnly())
-    conv.send("Jane Miller moved, change the address in her profile")
-    conv.send("Home")
+    conv.send("Jane Miller moved, change her address")
     pid = address_lookup.suggest("1 Bryant Park")["suggestions"][0]["id"]
-    r = conv.send(f"address_pick:{pid}|Apt 12C")
-    check("T-49a", "the unit sent with 'Use this address' is on the confirm card",
-          r.status == "awaiting_confirmation" and "Apt 12C" in r.data["input"]["new_address"])
+    conv.send("ticket_address:" + json.dumps({"pick": pid, "unit": "Apt 12C", "phone": ""}))
+    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
+    check("T-49a", "the unit sent with 'Use this address' is on the ticket's review card",
+          r.status == "awaiting_confirmation" and "Apt 12C" in json.dumps(r.data["input"]))
 
     print("\nP2-04 (F-50)  Part of a name: check the client first")
     _, conv = fresh(CodeOnly())
@@ -112,15 +112,15 @@ def run():
     check("T-50c", "full name written: no extra check", r.status == "awaiting_confirmation")
 
     print("\nP2-05 (F-51)  An address typed in the message is explained on the address card")
-    _, conv = fresh(ScriptedModel(route("update-address"), {"role": "assistant", "content": "ok"}))
-    r = conv.send("Add 10 Downing St, London as Jane Miller's delivery address")
-    check("T-51a", "outside the US: says so above the field",
-          kind(r) == "address_input" and r.card.get("notice", "").startswith(
+    _, conv = fresh(ScriptedModel(route("address-update")))
+    r = conv.send("Change Jane Miller's address to 10 Downing St, London")
+    check("T-51a", "outside the US: says so above the field (Address Update ticket)",
+          kind(r) == "ticket_address" and r.card.get("notice", "").startswith(
               "10 Downing St, London is outside the US") and not r.card.get("prefill"))
-    _, conv = fresh(ScriptedModel(route("update-address"), {"role": "assistant", "content": "ok"}))
-    r = conv.send("Add 1100 Congress Ave, Austin as Jane Miller's delivery address")
+    _, conv = fresh(ScriptedModel(route("address-update")))
+    r = conv.send("Change Jane Miller's address to 1100 Congress Ave, Austin")
     check("T-51b", "US address: put in the field to pick from the suggestions",
-          kind(r) == "address_input" and r.card.get("prefill") == "1100 Congress Ave, Austin"
+          kind(r) == "ticket_address" and r.card.get("prefill") == "1100 Congress Ave, Austin"
           and "Pick the address" in r.card.get("info", ""))
 
     print("\nP2-06 (F-52)  Capitals and small typos in the client's name")
@@ -143,13 +143,13 @@ def run():
     r = conv.send("lock robert castelano card")
     check("T-52c", "also when the AI looked up the misspelt name",
           r.card["message"].startswith("Did you mean Robert Castellano"))
-    m = ScriptedModel(route("close-card"), call("find_client", query="margaret osei-bonshu"))
+    m = ScriptedModel(route("replace-card"), call("find_client", query="margaret osei-bonshu"))
     _, conv = fresh(m)
-    r = conv.send("cloase margaret osei-bonshu's card permanently, she is switching banks")
+    r = conv.send("replace margaret osei-bonshu's card, it's damaged")
     check("T-52c", "hyphenated name with a typo, lower case",
           r.card["message"] == "Did you mean Margaret Osei-Bonsu (Short Hills, born 1958)?")
     r = conv.send("Yes, Margaret Osei-Bonsu")
-    check("T-52c", "Yes: then the permission refusal (no close permission)",
+    check("T-52c", "Yes: then the permission refusal (no replace permission)",
           r.data.get("code") == "not_entitled")
     _, conv = fresh(CodeOnly())
     r = conv.send("lock margaret osei-bonshu card")

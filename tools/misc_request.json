@@ -1,0 +1,58 @@
+{
+  "name": "misc_request",
+  "access": "write",
+  "ticket": true,
+  "description": "Send a Misc. AMA/Res. Checking Issues ticket to the Service Center.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client."
+      },
+      "account_id": {
+        "type": "string",
+        "description": "Account identifier returned by list_accounts."
+      },
+      "draft_id": {
+        "type": "string",
+        "description": "Set by the system; one per review card (no duplicate tickets)."
+      },
+      "subject": {
+        "type": "string",
+        "description": "Subject/Attention."
+      },
+      "additional_info": {
+        "type": "string",
+        "description": "Additional Information (the advisor's own words)."
+      },
+      "callback": {
+        "type": "object",
+        "description": "Call Back #: {kind: US | Non-US, number, ext}."
+      },
+      "attachments": {
+        "type": "array",
+        "description": "Optional files: {storage_id, name, size, type}."
+      },
+      "ibd": {
+        "type": "string",
+        "description": "IBD # (instead of an account)."
+      },
+      "office": {
+        "type": "string",
+        "description": "Office #."
+      },
+      "ip": {
+        "type": "string",
+        "description": "IP #."
+      }
+    },
+    "required": [
+      "client_id",
+      "subject",
+      "additional_info",
+      "callback",
+      "draft_id"
+    ]
+  }
+}

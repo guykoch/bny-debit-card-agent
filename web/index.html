@@ -187,6 +187,68 @@
   .send svg { width: 16px; height: 16px; }
   .note { font-size: 10.5px; color: var(--hint); text-align: center; padding: 6px 14px 10px; line-height: 1.35; }
   .below { font-size: 11px; color: #6B7684; margin-top: 10px; text-align: center; flex: none; margin-bottom: auto; }
+  /* Actions menu: two groups (Do it now / Send a ticket) */
+  .grp { margin-bottom: 10px; }
+  .grp:last-of-type { margin-bottom: 0; }
+  .grph { font-size: 12px; font-weight: 700; color: var(--head); text-transform: uppercase; letter-spacing: .04em;
+    margin: 2px 0 6px; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    background: none; border: 0; padding: 0; width: 100%; font-family: inherit; cursor: default; }
+  .grph .tw { display: none; color: var(--blue); font-size: 14px; }
+  .grpn { font-size: 11.5px; color: var(--hint); margin: -2px 0 6px; }
+  /* Admin menu and the Active Tickets panel */
+  .admin { position: relative; }
+  .admmenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; background: var(--white);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px; width: 230px;
+    box-shadow: 0 8px 22px rgba(31,45,74,.16); display: none; }
+  .admmenu.open { display: block; }
+  .admmenu .lbl { font-size: 11.5px; color: var(--hint); margin-bottom: 4px; }
+  .admmenu select { width: 100%; margin-bottom: 10px; border-radius: 8px; padding: 5px 8px; }
+  .admmenu button.b { width: 100%; }
+  .sheet { position: absolute; inset: 0; z-index: 30; background: rgba(31,45,74,.28); border-radius: 12px;
+    display: flex; align-items: flex-end; }
+  .sheetin { background: var(--white); width: 100%; max-height: 82%; border-radius: 12px 12px 0 0;
+    display: flex; flex-direction: column; box-shadow: 0 -6px 20px rgba(31,45,74,.18); }
+  .sheethd { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sheethd b { flex: 1; color: var(--head); font-size: 14px; }
+  .sheethd button { border: 0; background: transparent; font-size: 20px; color: var(--hint); cursor: pointer; line-height: 1; }
+  .sheetbd { overflow-y: auto; padding: 10px 14px 14px; font-size: 13px; }
+  .trow { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; padding: 8px 6px; border-bottom: 1px solid #EDF1F6;
+    cursor: pointer; border-radius: 6px; text-align: left; width: 100%; background: transparent; border-left: 0; border-right: 0; border-top: 0; font: inherit; color: var(--text); }
+  .trow:hover { background: var(--blue-tint); }
+  .trow .sr { font-weight: 700; color: var(--blue); }
+  .trow .st { font-size: 11.5px; color: var(--green); font-weight: 600; }
+  .trow .sub { grid-column: 2 / 4; color: var(--hint); font-size: 12px; }
+  .tdet .fields span:first-child { min-width: 120px; }
+  .back { border: 0; background: transparent; color: var(--blue); cursor: pointer; font: inherit; font-size: 13px; padding: 0 0 8px; }
+  /* Ticket cards */
+  .crow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 8px 0; border-top: 1px dashed var(--border); }
+  .crow:first-of-type { border-top: 0; padding-top: 0; }
+  .crow .wide { grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between; }
+  .crow input { width: 100%; font: inherit; font-size: 14px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; }
+  .crow .lbl { font-size: 11.5px; color: var(--hint); margin-bottom: 2px; }
+  .linkb { border: 0; background: transparent; color: var(--blue); cursor: pointer; font: inherit; font-size: 13px; padding: 2px 0; }
+  .linkb.rm { color: var(--hint); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
+  .seg button { border: 0; background: var(--white); font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer; color: var(--hint); }
+  .seg button.on { background: var(--blue); color: #fff; font-weight: 600; }
+  .cbrow { display: flex; gap: 8px; }
+  .cbrow input { font: inherit; font-size: 14px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+  .cbrow .num { flex: 1; } .cbrow .ext { width: 70px; }
+  .tform { font-size: 11.5px; color: var(--hint); margin: -2px 0 8px; }
+  .rule { font-size: 12px; color: var(--red); margin: 6px 0 8px; }
+  .tnote { font-size: 12px; color: var(--red); margin-bottom: 8px; }
+  .allf { margin: 4px 0 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+  .atts { margin: 2px 0 8px; }
+  .att { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 0; }
+  .att span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .att button { border: 0; background: transparent; color: var(--hint); cursor: pointer; font-size: 15px; }
+  .attnote { font-size: 11px; color: var(--hint); margin-top: 2px; }
+  @media (max-width: 600px) {
+    .grp.collapsible .grph { cursor: pointer; }
+    .grp.collapsible .grph .tw { display: inline; }
+    .grp.collapsible.shut .opts, .grp.collapsible.shut .grpn { display: none; }
+    .crow input, .cbrow input, .admmenu select { font-size: 16px; }
+  }
   @media (max-width: 600px) {
     body { padding: 8px 8px max(8px, env(safe-area-inset-bottom)); }
     .panel { border-radius: 10px; }
@@ -205,7 +267,14 @@
     <span class="title">NetX AI</span>
     <span class="grow"></span>
     <button id="actions" class="advisor actbtn" title="Pick a card action">Actions</button>
-    <select id="advisor" class="advisor" title="Signed-in advisor (mock)"></select>
+    <div class="admin">
+      <button id="adminbtn" class="advisor" title="Admin">Admin &#9662;</button>
+      <div id="admmenu" class="admmenu">
+        <div class="lbl">Advisor ID (signed-in advisor, mock)</div>
+        <select id="advisor" class="advisor"></select>
+        <button id="ticketsbtn" class="b alt">Active Tickets</button>
+      </div>
+    </div>
     <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
   </header>
@@ -236,7 +305,7 @@ const ICONS = {
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
 };
-const WELCOME = "Hi, I can help with your clients' debit cards: lock, unlock, replace, close permanently, report lost or stolen, travel notices, and the addresses cards are sent to. Type a request, or tap Actions.";
+const WELCOME = "Hi, I can help with your clients' debit cards (lock, unlock, replace, report lost or stolen, travel notices) and send Service Center tickets (stop a payment, a check copy, an address change, other requests). Type a request, or tap Actions.";
 
 const $ = (id) => document.getElementById(id);
 const msgs = $("msgs"), input = $("input"), sendBtn = $("send"), advisorSel = $("advisor");
@@ -267,14 +336,30 @@ function renderChoice(card) {
   if (card.message) c.appendChild(el("div", "q", esc(card.message)));
   const all = card.actions || [];
   const acts = all.filter(a => a.style !== "cancel");
-  const longest = Math.max(0, ...acts.map(a => a.label.length));
-  const opts = el("div", "opts" + (acts.length > 2 || longest > 22 ? " stack" : ""));
-  acts.forEach(a => {
-    const btn = el("button", "b opt", esc(a.label));
-    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
-    opts.appendChild(btn);
-  });
-  c.appendChild(opts);
+  function optList(list) {
+    const longest = Math.max(0, ...list.map(a => a.label.length));
+    const opts = el("div", "opts" + (list.length > 2 || longest > 22 ? " stack" : ""));
+    list.forEach(a => {
+      const btn = el("button", "b opt", esc(a.label));
+      btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+      opts.appendChild(btn);
+    });
+    return opts;
+  }
+  if (card.groups) {                       // Actions menu: Do it now / Send a ticket
+    Object.entries(card.groups).forEach(([g, name]) => {
+      const list = acts.filter(a => a.group === g);
+      if (!list.length) return;
+      const box = el("div", "grp" + (g === "ticket" ? " collapsible shut" : ""));
+      const h = el("button", "grph", `<span>${esc(name)}</span><span class="tw">&#9662;</span>`); h.type = "button";
+      h.onclick = () => box.classList.toggle("shut");
+      box.appendChild(h);
+      const note = (card.group_notes || {})[g];
+      if (note) box.appendChild(el("div", "grpn", esc(note)));
+      box.appendChild(optList(list));
+      c.appendChild(box);
+    });
+  } else c.appendChild(optList(acts));
   cancelRow(c, all);
   return c;
 }
@@ -631,6 +716,397 @@ function renderConfirm(card) {
   return c;
 }
 
+// ------------------------------------------------------------ Service Center tickets
+// The page only collects values; the server checks every one again.
+function inputBox(ph, val, cls) {
+  const i = el("input", cls || null); i.type = "text"; i.autocomplete = "off";
+  i.placeholder = ph || ""; i.value = val || ""; return i;
+}
+function moneyOk(v) { return /^\$?\s*\d{1,3}(,?\d{3})*(\.\d{1,2})?$/.test(String(v).trim()) && parseFloat(String(v).replace(/[$,\s]/g, "")) > 0; }
+
+// Check #, Amount, Date Written rows (+ Add another check).
+function renderCheckForm(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const list = el("div"); c.appendChild(list);
+  const max = card.max_rows || 1, needAmt = !!card.amount_required;
+  const rows = [];
+  const err = el("div", "dh err"); err.style.fontSize = "12px";
+  function addRow(r) {
+    r = r || {};
+    const box = el("div", "crow");
+    const num = inputBox("e.g. 1043", r.check_number), amt = inputBox(needAmt ? "e.g. 250.00" : "optional", r.amount);
+    num.inputMode = "numeric"; amt.inputMode = "decimal";
+    const date = usDateBox("cd"); date.max = isoLocal(new Date()); if (r.date_written) date.value = r.date_written;
+    const f1 = el("div"), f2 = el("div"), f3 = el("div", "wide");
+    f1.append(el("div", "lbl", "Check #"), num);
+    f2.append(el("div", "lbl", "Amount" + (needAmt ? "" : " (optional)")), amt);
+    const dwrap = el("div"); dwrap.append(el("div", "lbl", "Date written (optional)"), date);
+    f3.appendChild(dwrap);
+    const row = { box, num, amt, date };
+    if (rows.length) {
+      const rm = el("button", "linkb rm", "Remove"); rm.type = "button";
+      rm.onclick = () => { rows.splice(rows.indexOf(row), 1); box.remove(); more.style.display = rows.length < max ? "" : "none"; valid(); };
+      f3.appendChild(rm);
+    }
+    box.append(f1, f2, f3); list.appendChild(box); rows.push(row);
+    [num, amt].forEach(x => x.addEventListener("input", valid));
+    more.style.display = rows.length < max ? "" : "none";
+  }
+  const more = el("button", "linkb", "+ Add another check"); more.type = "button";
+  more.onclick = () => { if (rows.length < max) { addRow(); valid(); } };
+  (card.rows && card.rows.length ? card.rows : [{}]).slice(0, max).forEach(addRow);
+  c.appendChild(more); c.appendChild(err);
+  const go = el("button", "b primary", "Continue");
+  function valid() {
+    err.textContent = "";
+    const ok = rows.every(r => /^\d{1,10}$/.test(r.num.value.trim()) &&
+      (r.amt.value.trim() ? moneyOk(r.amt.value) : !needAmt));
+    const bad = rows.find(r => r.amt.value.trim() && !moneyOk(r.amt.value));
+    if (bad) err.textContent = "The amount must be a dollar amount, e.g. 250.00.";
+    go.disabled = !ok; return ok;
+  }
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    const out = rows.map(r => ({ check_number: r.num.value.trim(), amount: r.amt.value.trim().replace(/[$,\s]/g, ""), date_written: r.date.value }));
+    lockCard(c, go); c.querySelectorAll("input").forEach(i => i.disabled = true);
+    send("check_form:" + JSON.stringify({ rows: out }), out.map(r => `Check ${r.check_number}` + (r.amount ? ` $${r.amount}` : "")).join("; "));
+  };
+  valid();
+  cancelRow(c, card.actions, [go]);
+  setTimeout(() => rows[0] && rows[0].num.focus(), 50);
+  return c;
+}
+
+// Call Back #: US 3-3-4 + extension, or Non-US.
+function callbackFields(parent, value) {
+  let kind = (value && value.kind) === "Non-US" ? "Non-US" : "US";
+  const seg = el("div", "seg"), us = el("button", null, "US"), nonus = el("button", null, "Non-US");
+  us.type = nonus.type = "button"; seg.append(us, nonus);
+  const row = el("div", "cbrow");
+  const num = inputBox("", value && value.number, "num"), ext = inputBox("Ext", value && value.ext, "ext");
+  num.inputMode = "tel"; ext.inputMode = "numeric";
+  row.append(num, ext);
+  const hint = el("div", "dh"); hint.style.fontSize = "11.5px"; hint.style.marginTop = "4px";
+  function paint() {
+    us.classList.toggle("on", kind === "US"); nonus.classList.toggle("on", kind === "Non-US");
+    num.placeholder = kind === "US" ? "xxx-xxx-xxxx" : "+44 20 7946 0000";
+    ext.style.display = kind === "US" ? "" : "none";
+    hint.textContent = kind === "US" ? "10 digits, e.g. 212-555-0142." : "6 to 15 digits, with the country code.";
+  }
+  num.addEventListener("input", () => {
+    if (kind !== "US") return;
+    const d = num.value.replace(/\D/g, "").slice(0, 10);
+    num.value = d.length > 6 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : d.length > 3 ? `${d.slice(0, 3)}-${d.slice(3)}` : d;
+  });
+  us.onclick = () => { kind = "US"; paint(); num.dispatchEvent(new Event("input")); };
+  nonus.onclick = () => { kind = "Non-US"; paint(); num.dispatchEvent(new Event("input")); };
+  parent.append(seg, row, hint); paint();
+  return {
+    num, ext,
+    ok: () => { const d = num.value.replace(/\D/g, ""); return kind === "US" ? d.length === 10 : d.length >= 6 && d.length <= 15; },
+    value: () => ({ kind, number: num.value.trim(), ext: kind === "US" ? ext.value.replace(/\D/g, "") : "" })
+  };
+}
+
+function renderCallback(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const cb = callbackFields(c, card.value);
+  const go = el("button", "b primary", "Continue");
+  const valid = () => { go.disabled = !cb.ok(); return cb.ok(); };
+  [cb.num, cb.ext].forEach(x => x.addEventListener("input", valid));
+  c.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", valid));
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    const v = cb.value();
+    lockCard(c, go); c.querySelectorAll("input").forEach(i => i.disabled = true);
+    send("callback_form:" + JSON.stringify(v), "Call Back # " + v.number + (v.ext ? " ext " + v.ext : ""));
+  };
+  valid();
+  cancelRow(c, card.actions, [go]);
+  setTimeout(() => cb.num.focus(), 50);
+  return c;
+}
+
+// New address (search + select + apartment line) and/or New Phone #.
+function renderTicketAddress(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const q = inputBox("Start typing the new address…", card.prefill);
+  const sugs = el("div", "sugs"), pw = el("div", "pw", "");
+  const chosen = el("div", "chosen"); chosen.style.display = "none";
+  const apt = inputBox("Apt, suite, unit (optional)");
+  const change = el("button", "linkb", "Change address"); change.type = "button"; change.style.display = "none";
+  const phoneF = el("div", "field");
+  const phone = inputBox("New phone # (optional), e.g. 212-555-0142", card.phone); phone.inputMode = "tel";
+  phoneF.append(el("div", "lbl", "New phone #"), phone);
+  c.append(q, sugs, pw, chosen, apt, change, phoneF);
+  const session = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^a-zA-Z0-9-]/g, "");
+  let timer = null, seq = 0, picked = null;
+  const go = el("button", "b primary", "Continue");
+  const valid = () => { const ok = !!picked || phone.value.replace(/\D/g, "").length >= 10; go.disabled = !ok; return ok; };
+  function select(sg) {
+    picked = sg;
+    chosen.innerHTML = `<span class="lbl">Selected address</span><b>${esc(sg.text)}</b>`;
+    chosen.style.display = ""; q.style.display = "none"; sugs.innerHTML = ""; pw.textContent = "";
+    change.style.display = ""; valid(); setTimeout(() => apt.focus(), 30);
+  }
+  change.onclick = () => { picked = null; chosen.style.display = "none"; q.style.display = ""; change.style.display = "none"; valid(); q.focus(); q.dispatchEvent(new Event("input")); };
+  q.oninput = () => {
+    clearTimeout(timer);
+    const text = q.value.trim();
+    if (text.length < 3) { sugs.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try {
+        const res = await fetch(`/api/address/suggest?q=${encodeURIComponent(text)}&session=${session}`, { headers: demoHeaders() });
+        const out = await res.json();
+        if (mine !== seq || picked) return;
+        sugs.innerHTML = "";
+        pw.textContent = out.provider === "google" ? "Suggestions powered by Google" : "Demo address list";
+        if (!(out.suggestions || []).length) { sugs.appendChild(el("div", "hint", "No matching US address yet - keep typing.")); return; }
+        out.suggestions.forEach(sg => {
+          const b = el("button", "sug", `<b>${esc(sg.main || sg.text)}</b> <span>${esc(sg.secondary || "")}</span>`);
+          b.onclick = () => { if (!busy) select(sg); };
+          sugs.appendChild(b);
+        });
+      } catch (e) { sugs.innerHTML = ""; sugs.appendChild(el("div", "hint", "Address search is not available right now.")); }
+    }, 250);
+  };
+  phone.addEventListener("input", valid);
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    const unit = apt.value.trim();
+    lockCard(c, go); c.querySelectorAll("input").forEach(i => i.disabled = true);
+    const shown = [picked ? picked.text + (unit ? ` (${unit})` : "") : "", phone.value.trim()].filter(Boolean).join(" · ");
+    send("ticket_address:" + JSON.stringify({ pick: picked ? picked.id : "", unit, phone: phone.value.trim() }), shown);
+  };
+  valid();
+  cancelRow(c, card.actions, [go]);
+  if (card.prefill) setTimeout(() => q.dispatchEvent(new Event("input")), 50);
+  setTimeout(() => q.focus(), 50);
+  return c;
+}
+
+// A few labelled boxes on one card (e.g. Subject + Additional Information).
+function renderFieldsForm(card) {
+  const c = el("div", "card");
+  cardHead(c, card);
+  const boxes = {};
+  (card.inputs || []).forEach(f => {
+    const fld = el("div", "field");
+    fld.appendChild(el("div", "lbl", esc(f.label) + (f.required ? " (required)" : "")));
+    const i = f.multiline ? el("textarea") : el("input");
+    if (!f.multiline) i.type = "text";
+    i.maxLength = f.multiline ? 1000 : 120; i.placeholder = f.placeholder || ""; i.value = f.value || "";
+    fld.appendChild(i); c.appendChild(fld); boxes[f.id] = { i, f };
+  });
+  const go = el("button", "b primary", esc(card.submit || "Continue"));
+  const valid = () => {
+    const list = Object.values(boxes);
+    const req = list.every(b => !b.f.required || b.i.value.trim());
+    const any = list.some(b => b.i.value.trim());
+    go.disabled = !(req && any); return !go.disabled;
+  };
+  Object.values(boxes).forEach(b => b.i.addEventListener("input", valid));
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    const out = {}; Object.entries(boxes).forEach(([k, b]) => out[k] = b.i.value.trim());
+    lockCard(c, go); c.querySelectorAll("input, textarea").forEach(i => i.disabled = true);
+    send("fields_form:" + JSON.stringify(out), Object.values(boxes).map(b => b.i.value.trim()).filter(Boolean).join(" · ").slice(0, 160));
+  };
+  valid();
+  cancelRow(c, card.actions, [go]);
+  setTimeout(() => { const f = Object.values(boxes)[0]; if (f) f.i.focus(); }, 50);
+  return c;
+}
+
+// A looked-up check (read-only) with what can be done next.
+function renderCheckStatus(card) {
+  const c = el("div", "card");
+  topLines(c, card);
+  c.appendChild(el("h4", null, esc(card.title)));
+  const f = el("div", "fields");
+  (card.fields || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+  c.appendChild(f);
+  const btns = el("div", "btns");
+  (card.actions || []).forEach(a => {
+    const btn = el("button", "b " + (a.value === "__no__" || a.style === "cancel" ? "" : "alt"), esc(a.label));
+    btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    btns.appendChild(btn);
+  });
+  c.appendChild(btns);
+  return c;
+}
+
+// Attachments: the browser asks where to upload, sends the file there, and keeps
+// only the storage id. Files never go to the AI. The server checks them again on Send.
+async function uploadFile(file) {
+  const r1 = await fetch("/api/tickets/upload-url", { method: "POST", headers: demoHeaders() });
+  const t = await r1.json();
+  if (!t.url) throw new Error("no upload url");
+  const local = t.url.startsWith("/");
+  const r2 = await fetch(t.url, { method: "POST", headers: { "Content-Type": file.type, ...(local ? demoHeaders() : {}) }, body: file });
+  const out = await r2.json();
+  if (!out.storageId) throw new Error(out.message || "upload failed");
+  return out.storageId;
+}
+
+// The short ticket review card: key fields, Show all fields, + Attach file, Send.
+function renderTicketReview(card) {
+  const t = card.ticket, ed = t.editable || {};
+  const c = el("div", "card");
+  topLines(c, card);
+  c.appendChild(el("h4", null, esc(t.title)));
+  if (t.form) c.appendChild(el("div", "tform", esc(t.form)));
+  const f = el("div", "fields");
+  (t.key || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+  const cbLine = el("div"); f.appendChild(cbLine);
+  c.appendChild(f);
+  (t.warnings || []).forEach(w => c.appendChild(el("div", "tnote", esc(w))));
+  if (t.note) c.appendChild(el("div", "tnote", esc(t.note)));
+
+  // Show all fields: the whole form, with Subject / Additional Information / Call Back # editable.
+  const all = el("div", "allf"); all.style.display = "none";
+  const fa = el("div", "fields");
+  (t.all || []).filter(x => !["Subject", "Additional Information", "Call Back #"].includes(x.label))
+    .forEach(x => fa.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+  all.appendChild(fa);
+  const subjF = el("div", "field"), subj = inputBox("Subject", ed.subject); subj.maxLength = 120;
+  subjF.append(el("div", "lbl", "Subject" + (ed.subject_required ? " (required)" : " (optional)")), subj);
+  const infoF = el("div", "field"), info = el("textarea"); info.maxLength = 1000; info.value = ed.additional_info || "";
+  infoF.append(el("div", "lbl", "Additional Information" + (ed.info_required ? " (required)" : " (optional)")), info);
+  const cbF = el("div", "field"); cbF.appendChild(el("div", "lbl", "Call Back #"));
+  const cb = callbackFields(cbF, ed.callback);
+  all.append(subjF, infoF, cbF);
+  if (t.rule) all.appendChild(el("div", "rule", esc(t.rule)));
+  c.appendChild(all);
+  function paintCb() {
+    const v = cb.value();
+    cbLine.innerHTML = v.number ? `<span>Call Back #</span><span>${esc(v.number + (v.ext ? " ext " + v.ext : ""))}</span>` : "";
+  }
+
+  // Attachments
+  const ac = t.attachments || { max: 5, max_mb: 10, types: "PDF, JPG or PNG" };
+  let files = (ac.files || []).map(x => ({ storage_id: x.storage_id, name: x.name }));
+  const atts = el("div", "atts"), attErr = el("div", "dh err"); attErr.style.fontSize = "12px";
+  const picker = el("input"); picker.type = "file"; picker.accept = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png";
+  picker.multiple = true; picker.style.display = "none";
+  const attach = el("button", "linkb", "+ Attach file"); attach.type = "button";
+  let uploading = 0;
+  function drawAtts() {
+    atts.innerHTML = "";
+    files.forEach((x, i) => {
+      const row = el("div", "att", `<span>Attached: ${esc(x.name)}</span>`);
+      const rm = el("button", null, "×"); rm.title = "Remove"; rm.type = "button";
+      rm.onclick = () => { files.splice(i, 1); drawAtts(); };
+      row.appendChild(rm); atts.appendChild(row);
+    });
+    if (uploading) atts.appendChild(el("div", "hint", "Uploading…"));
+    attach.style.display = files.length + uploading < ac.max ? "" : "none";
+    valid();
+  }
+  attach.onclick = () => { if (!busy) picker.click(); };
+  picker.onchange = async () => {
+    attErr.textContent = "";
+    for (const file of Array.from(picker.files || [])) {
+      if (files.length + uploading >= ac.max) { attErr.textContent = `At most ${ac.max} files.`; break; }
+      if (!/^(application\/pdf|image\/jpeg|image\/png)$/.test(file.type)) { attErr.textContent = `${file.name}: only ${ac.types} files.`; continue; }
+      if (file.size > ac.max_mb * 1024 * 1024) { attErr.textContent = `${file.name} is over ${ac.max_mb} MB.`; continue; }
+      uploading++; drawAtts();
+      try { files.push({ storage_id: await uploadFile(file), name: file.name }); }
+      catch (e) { attErr.textContent = `${file.name} could not be uploaded. Please try again.`; }
+      uploading--; drawAtts();
+    }
+    picker.value = "";
+  };
+  c.append(atts, picker, attErr);
+  const attRow = el("div"); attRow.appendChild(attach);
+  if (ac.note) attRow.appendChild(el("div", "attnote", esc(ac.note) + ` Up to ${ac.max} files, ${ac.types}, ${ac.max_mb} MB each.`));
+  c.appendChild(attRow);
+
+  const showAll = el("button", "linkb", "Show all fields"); showAll.type = "button";
+  showAll.onclick = () => {
+    const open = all.style.display === "none";
+    all.style.display = open ? "" : "none"; showAll.textContent = open ? "Hide fields" : "Show all fields";
+    if (open) all.scrollIntoView({ block: "nearest" });
+  };
+  c.insertBefore(showAll, atts);
+
+  let sendBtn2 = null;
+  function valid() {
+    const ok = !uploading && cb.ok() && (!ed.subject_required || subj.value.trim()) && (!ed.info_required || info.value.trim());
+    if (sendBtn2) sendBtn2.disabled = !ok;
+    return ok;
+  }
+  [subj, info, cb.num, cb.ext].forEach(x => x.addEventListener("input", () => { paintCb(); valid(); }));
+  c.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { paintCb(); valid(); }));
+  if (!cb.ok()) { all.style.display = ""; showAll.textContent = "Hide fields"; }
+
+  const btns = el("div", "btns");
+  (card.actions || []).forEach(a => {
+    const cls = a.style === "primary" ? "primary" : a.style === "alternative" ? "alt" : "";
+    const btn = el("button", "b " + cls, esc(a.label));
+    if (a.value === "confirm") {
+      sendBtn2 = btn;
+      btn.onclick = () => {
+        if (busy || !valid()) return;
+        const extra = { subject: subj.value.trim(), additional_info: info.value.trim(), callback: cb.value(), attachments: files };
+        lockCard(c, btn); c.querySelectorAll("input, textarea").forEach(i => i.disabled = true);
+        send("confirm_with:" + JSON.stringify(extra), a.label);
+      };
+    } else btn.onclick = () => { if (busy) return; lockCard(c, btn); send(a.value, a.label); };
+    btns.appendChild(btn);
+  });
+  btns.appendChild(el("span", "hint", "nothing has been sent yet"));
+  c.appendChild(btns);
+  paintCb(); drawAtts();
+  return c;
+}
+
+// Admin menu -> Active Tickets: this advisor's tickets; tap a row for the details.
+function openTickets() {
+  $("admmenu").classList.remove("open");
+  const sheet = el("div", "sheet"), inner = el("div", "sheetin");
+  const hd = el("div", "sheethd", `<b>Active Tickets · ${esc(advisorSel.value)}</b>`);
+  const x = el("button", null, "×"); x.title = "Close"; x.onclick = () => sheet.remove();
+  hd.appendChild(x);
+  const bd = el("div", "sheetbd", '<div class="hint">Loading…</div>');
+  inner.append(hd, bd); sheet.appendChild(inner);
+  sheet.onclick = e => { if (e.target === sheet) sheet.remove(); };
+  document.querySelector(".panel").appendChild(sheet);
+  let rows = [];
+  function list() {
+    bd.innerHTML = "";
+    if (!rows.length) { bd.appendChild(el("div", "hint", "No tickets yet.")); return; }
+    rows.forEach(t => {
+      const r = el("button", "trow",
+        `<span class="sr">${esc(t.ticket_id)}</span><span>${esc(t.ticket)}</span><span class="st">${esc(t.status || "Sent")}</span>
+         <span class="sub">${esc(t.client_name)} · ${esc(t.when)}</span>`);
+      r.onclick = () => detail(t);
+      bd.appendChild(r);
+    });
+  }
+  function detail(t) {
+    bd.innerHTML = "";
+    const back = el("button", "back", "‹ All tickets"); back.onclick = list;
+    const d = el("div", "tdet");
+    d.appendChild(el("h4", null, esc(`${t.ticket_id} · ${t.ticket}`)));
+    const f = el("div", "fields");
+    [["Status", t.status || "Sent"], ["Sent", t.when], ["Client", t.client_name], ["Account", t.account]]
+      .concat((t.fields || []).map(x => [x.label, x.value]))
+      .filter(([, v]) => v)
+      .forEach(([k, v]) => f.appendChild(el("div", null, `<span>${esc(k)}</span><span>${esc(v)}</span>`)));
+    (t.attachments || []).forEach(a => f.appendChild(el("div", null, `<span>Attachment</span><span>${esc(a.name)}</span>`)));
+    d.appendChild(f);
+    bd.append(back, d);
+  }
+  fetch(`/api/tickets?advisor=${encodeURIComponent(advisorSel.value)}`, { headers: demoHeaders() })
+    .then(r => r.json()).then(out => { rows = out.tickets || []; list(); })
+    .catch(() => { bd.innerHTML = ""; bd.appendChild(el("div", "err", "The server is not reachable.")); });
+}
+
 function renderReply(r) {
   const card = r.card;
   if (r.status === "error" && !card) { addBot(el("div", "text err", esc(r.message))); return; }
@@ -639,7 +1115,13 @@ function renderReply(r) {
     wrap.appendChild(renderChoice(card));
     addBot(wrap, false); return;
   }
+  if (card && card.kind === "confirm" && card.ticket) { addBot(renderTicketReview(card), false); return; }
   if (card && card.kind === "confirm") { addBot(renderConfirm(card), false); return; }
+  if (card && card.kind === "check_form") { addBot(renderCheckForm(card), false); return; }
+  if (card && card.kind === "callback_form") { addBot(renderCallback(card), false); return; }
+  if (card && card.kind === "ticket_address") { addBot(renderTicketAddress(card), false); return; }
+  if (card && card.kind === "fields_form") { addBot(renderFieldsForm(card), false); return; }
+  if (card && card.kind === "check_status") { addBot(renderCheckStatus(card), false); return; }
   if (card && card.kind === "address_input") { addBot(renderAddress(card), false); return; }
   if (card && card.kind === "client_input") { addBot(renderClientInput(card), false); return; }
   if (card && card.kind === "travel_form") { addBot(renderTravelForm(card), false); return; }
@@ -697,8 +1179,12 @@ function autosize() { input.style.height = "auto"; input.style.height = Math.min
 sendBtn.onclick = submit;
 input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
 input.addEventListener("input", autosize);
-advisorSel.onchange = newConversation;
+advisorSel.onchange = () => { $("admmenu").classList.remove("open"); newConversation(); };
 $("actions").onclick = () => { if (!busy) send("__actions__", "Actions"); };
+$("adminbtn").onclick = e => { e.stopPropagation(); $("admmenu").classList.toggle("open"); };
+$("admmenu").onclick = e => e.stopPropagation();
+document.addEventListener("click", () => $("admmenu").classList.remove("open"));
+$("ticketsbtn").onclick = openTickets;
 
 function start() { newConversation(); input.focus(); }
 

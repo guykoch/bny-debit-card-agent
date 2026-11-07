@@ -70,7 +70,7 @@ def run():
     a2a_server.reset_memory()
     say("Lock Jane Miller's card")
     say("confirm", "Confirm")
-    say("Close Margaret Osei-Bonsu's card permanently, she is switching banks")
+    say("Replace Margaret Osei-Bonsu's card")
     say("What's Jane's balance?")
     acts = audit.LOG
     lock = next(r for r in acts if r["action"] == "lock_card")

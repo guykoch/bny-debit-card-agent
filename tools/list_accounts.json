@@ -1,0 +1,17 @@
+{
+  "name": "list_accounts",
+  "access": "read",
+  "description": "List the client's accounts that checks are written on (AMA / Resource Checking).",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client."
+      }
+    },
+    "required": [
+      "client_id"
+    ]
+  }
+}

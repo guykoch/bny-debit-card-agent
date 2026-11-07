@@ -1,0 +1,70 @@
+{
+  "title": "Check Copy",
+  "menu_label": "Request a check copy",
+  "skill": "check-copy",
+  "category": "AMA/Resource Checking",
+  "request": "Check Copy",
+  "request_type_by_account": {
+    "AMA": "AMA Account",
+    "Resource Checking": "Resource Checking Account"
+  },
+  "note": "",
+  "fields": [
+    {
+      "id": "account_id",
+      "label": "Account #",
+      "required": true,
+      "type": "account"
+    },
+    {
+      "id": "subject",
+      "label": "Subject/Attention",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "checks",
+      "label": "Check",
+      "required": true,
+      "type": "check_rows",
+      "columns": [
+        {
+          "id": "check_number",
+          "label": "Check #",
+          "required": true
+        },
+        {
+          "id": "amount",
+          "label": "Amount",
+          "required": false
+        },
+        {
+          "id": "date_written",
+          "label": "Date Written",
+          "required": false
+        }
+      ],
+      "max_rows": 1
+    },
+    {
+      "id": "additional_info",
+      "label": "Additional Information",
+      "required": false,
+      "type": "long_text"
+    },
+    {
+      "id": "callback",
+      "label": "Call Back #",
+      "required": true,
+      "type": "callback"
+    }
+  ],
+  "ask_order": [
+    "account_id",
+    "checks",
+    "callback"
+  ],
+  "placeholder_form": true,
+  "tool": "check_copy",
+  "common_note": "Please be advised, DO NOT key out a checking account number or debit card number on your Service Center requests."
+}

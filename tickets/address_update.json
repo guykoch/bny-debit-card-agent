@@ -1,0 +1,58 @@
+{
+  "title": "Address Update",
+  "menu_label": "Change an address",
+  "skill": "address-update",
+  "category": "AMA/Resource Checking",
+  "request": "Address Update",
+  "request_type": "AMA/Resource Checking Account",
+  "note": "Either the phone number or address are required.",
+  "fields": [
+    {
+      "id": "account_id",
+      "label": "Account #",
+      "required": true,
+      "type": "account"
+    },
+    {
+      "id": "subject",
+      "label": "Subject/Attention",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "new_address",
+      "label": "New Address",
+      "required": false,
+      "type": "address_lines"
+    },
+    {
+      "id": "new_phone",
+      "label": "New Phone #",
+      "required": false,
+      "type": "phone"
+    },
+    {
+      "id": "additional_info",
+      "label": "Additional Information",
+      "required": false,
+      "type": "long_text"
+    },
+    {
+      "id": "callback",
+      "label": "Call Back #",
+      "required": true,
+      "type": "callback"
+    }
+  ],
+  "one_of": [
+    "new_address",
+    "new_phone"
+  ],
+  "ask_order": [
+    "account_id",
+    "new_address",
+    "callback"
+  ],
+  "tool": "address_update",
+  "common_note": "Please be advised, DO NOT key out a checking account number or debit card number on your Service Center requests."
+}

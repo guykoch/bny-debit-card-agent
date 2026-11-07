@@ -43,7 +43,7 @@ MODE = os.environ.get("DCA_MODE", "mock")      # "mock" or "bny"
 # Set this to False to have the agent check entitlement itself as well. Two
 # reasons you might:
 #   - the upstream check is at client level ("may this advisor deal with this
-#     client") rather than action level ("may they close this card permanently")
+#     client") rather than action level ("may they replace this card")
 #   - a reviewer wants our audit to show what WE verified, not only what we
 #     were told
 # Either way the audit records which side did the checking, so the record is
@@ -52,7 +52,7 @@ TRUST_UPSTREAM_ENTITLEMENT = False            # F-01: we check permissions ourse
 
 # How permissions are read (decision D-01, still open with Ben):
 #   "per_action"      each advisor-client pair lists the actions allowed
-#                     (entitlements.csv), e.g. lock but not close
+#                     (entitlements.csv), e.g. lock but not replace
 #   "all_or_nothing"  any row for the pair gives every card action; no row, nothing
 # Ben described access as all or nothing; switch here if he confirms it.
 PERMISSION_MODEL = os.environ.get("DCA_PERMISSION_MODEL", "per_action")
@@ -80,8 +80,9 @@ PENDING_CARD_ACTIONS = {"lock_card", "replace_card"}
 
 # Unusual volume (decision D-06, team default): at most this many completed
 # actions of one kind per advisor in the time window. Agree real numbers with BNY.
-VOLUME_LIMITS = {"close_card": 3, "replace_card": 5, "report_lost_stolen": 5,
-                 "update_address": 3}
+VOLUME_LIMITS = {"replace_card": 5, "report_lost_stolen": 5,
+                 # Service Center tickets (per advisor, per window)
+                 "stop_payment": 10, "check_copy": 10, "address_update": 5, "misc_request": 10}
 VOLUME_WINDOW_MINUTES = 10
 
 
@@ -145,21 +146,34 @@ class Services:
     clients: object
     entitlements: object
     cards: object
+    checks: object = None            # accounts and checks (read-only)
+    tickets: object = None           # Service Center tickets
+    advisor_settings: object = None  # e.g. the saved Call Back #
+    files: object = None             # ticket attachments
 
 
 def build_services() -> Services:
     if MODE == "mock":
         from integrations.mock.services import (
-            MockCardSystem, MockClientDirectory, MockEntitlementService)
+            MemoryAdvisorSettings, MemoryFileStore, MemoryServiceCenter, MockCardSystem,
+            MockCheckSystem, MockClientDirectory, MockEntitlementService)
         ent = MockEntitlementService()
         book = None
         if active_store() == "convex":
-            from integrations.convex_store.services import ConvexAddressBook, ConvexCardSystem
+            from integrations.convex_store.services import (
+                ConvexAddressBook, ConvexAdvisorSettings, ConvexCardSystem, ConvexFileStore,
+                ConvexServiceCenter)
             cards = ConvexCardSystem()
             book = ConvexAddressBook(cards.client)
+            tickets = ConvexServiceCenter(cards.client)
+            prefs = ConvexAdvisorSettings(cards.client)
+            files = ConvexFileStore(cards.client)
         else:
             cards = MockCardSystem()
-        return Services(clients=MockClientDirectory(ent, book), entitlements=ent, cards=cards)
+            tickets, prefs, files = MemoryServiceCenter(), MemoryAdvisorSettings(), MemoryFileStore()
+        return Services(clients=MockClientDirectory(ent, book), entitlements=ent, cards=cards,
+                        checks=MockCheckSystem(), tickets=tickets, advisor_settings=prefs,
+                        files=files)
 
     if MODE == "bny":
         from integrations.bny.services import (

@@ -130,6 +130,28 @@ After pushing, run `npx convex deploy` from `convex-demo-db/`.
 Profile addresses now change during a demo, so they live in Convex on the hosted
 demo (new `addresses` table; Reset restores them from `addresses.csv`).
 
+## Service Center tickets (PLAN-TICKETS.md, November 2026)
+
+Checks: `python -m tests.test_tickets` (and every other suite, updated).
+
+| Fix | What changed | Where |
+|---|---|---|
+| F-55 | Four Service Center tickets: **Stop Payment, Check Copy, Address Update, Misc**. Send only saves a ticket (SR-10234 onwards); nothing else changes. Same guardrails as the card actions: permission per ticket, the account must be the client's, volume limits, audit ("Ticket: Stop Payment"), one ticket per draft even if Send is clicked twice. | `tickets/*.json` (the forms), `core/tickets.py`, `tools/stop_payment.json` etc., `skills/service-center/` |
+| F-55 | Ask only what is missing, one card per topic: which account (only if the client has more than one), check details, Call Back # (asked once, then saved per advisor), new address / phone, subject and details for Misc. Then a short review card: key fields, Show all fields (Subject, Additional Information, Call Back # editable), + Attach file, Send / Edit details / Cancel. | llm_runtime `_ticket_*`, `core/cards.py`, web/index.html |
+| F-55 | Checks are looked up first (`accounts.csv`, `checks.csv`): amount and date filled in; a paid check can't be stopped (offers a copy); a copy of an unpaid check offers to stop it; a number not on the account gets "Did you mean 1043?" buttons plus "No, keep 1045". Numbers are never guessed. | llm_runtime `_ticket_checks`, `integrations/mock/services.py` `MockCheckSystem` |
+| F-55 | Check look-up (read-only): "Did Jane's check 1043 clear?" shows the check with Stop this payment / Request a copy buttons. | `skills/service-center/check-status`, `tools/find_check.json`, `_check_status` |
+| F-55 | Free text is kept as the advisor typed it, but long digit runs (account or card numbers) are masked in Subject and Additional Information. | `core/tickets.py` `redact` |
+| F-55 | Attachments: optional on every ticket, PDF / JPG / PNG, 10 MB each, up to 5. Stored in Convex file storage (local server: memory), never sent to the AI, checked again on Send. | web/index.html `uploadFile`, `/api/tickets/upload-url`, `convex/demo.ts` `generateUploadUrl`, `fileMeta` |
+| F-56 | Address change is now an Address Update ticket only; the profile is not changed. A replacement to a new address: "A different address (ticket)" starts the ticket and says why. | llm_runtime `_start_address_ticket`, `_address_panel` |
+| F-57 | Close removed. A close request gets a fixed reply: a debit card can't be closed on its own; Replace / Lock buttons. "Cancel it" with no card or check word asks: a check or the card? | llm_runtime `CLOSE_REPLY`, `_CLOSE_WORDS`, `_CANCEL_ONLY` |
+| F-58 | Actions menu in two sections, Do it now / Send a ticket (with a note); on a phone the ticket section opens with a tap. Admin menu replaces the advisor list: Advisor ID and **Active Tickets** (SR #, ticket, client, date, status; tap a row for the details). | web/index.html `renderChoice`, `openTickets`; `GET /api/tickets` |
+
+Retired with close: F-35, F-36 and tests T-08a (now 5 replacements, the 6th refused),
+T-15a, T-35a/b, T-36a/b. Old update-address tests T-28a-g rewritten for the ticket.
+
+**Redeploy Convex this time:** `convex-demo-db/` changed (tables `tickets`,
+`advisor_settings`; file storage functions). After pushing, run `npx convex deploy`.
+
 ## Convex
 
 `convex-demo-db/` changed with F-28 (addresses table and functions). If

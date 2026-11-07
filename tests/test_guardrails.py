@@ -72,10 +72,13 @@ def run():
         r = dispatch(svc, adv, "lock_card", {"client_id": "C-77310", "card_id": "CARD-3310"},
                      confirmed=True)
         check("another advisor's client is refused", r.data.get("code") == "not_entitled")
-        r = dispatch(svc, adv, "close_card",
-                     {"client_id": "C-44090", "card_id": "CARD-9902", "reason": "client request"},
+        r = dispatch(svc, adv, "stop_payment",
+                     {"client_id": "C-44090", "account_id": "ACC-4409", "draft_id": "g-1",
+                      "checks": [{"check_number": "1", "amount": "1.00"}],
+                      "callback": {"kind": "US", "number": "212-555-0100"}},
                      confirmed=True)
-        check("may lock this client but may not close", r.data.get("code") == "not_entitled")
+        check("may lock this client but may not send a Stop Payment ticket",
+              r.data.get("code") == "not_entitled")
         r = dispatch(svc, adv, "lock_card", {"client_id": "C-10220", "card_id": "CARD-2201"},
                      confirmed=True)
         check("a permitted action still runs", r.status == "ok", r.message)

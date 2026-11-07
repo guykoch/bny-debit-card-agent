@@ -1,8 +1,8 @@
 {
   "name": "debit-card-agent",
   "displayName": "Debit Card Management",
-  "description": "Performs routine Corestone debit card actions for an advisor: lock, unlock, replace, close permanently, report lost or stolen, and travel notices. Acts on one card at a time and always asks for confirmation before changing anything.",
-  "version": "0.2.0",
+  "description": "Performs routine Corestone debit card actions for an advisor: lock, unlock, replace, report lost or stolen, and travel notices; and sends Service Center tickets (Stop Payment, Check Copy, Address Update, Misc). Acts on one card or one ticket at a time and always asks for confirmation before changing anything.",
+  "version": "0.3.0",
   "owner": "NYU Stern Tech Solutions team",
   "capabilities": {
     "writes": true,
@@ -14,7 +14,7 @@
     {
       "id": "debit-card-management",
       "name": "Debit card management",
-      "description": "Lock, unlock, replace, close, report lost or stolen, travel notice.",
+      "description": "Lock, unlock, replace, report lost or stolen, travel notice; Service Center tickets.",
       "examples": [
         "Lock Jane Miller's debit card",
         "Sarah Chen is travelling to Portugal next month, add a travel notice",

@@ -105,9 +105,6 @@ class BnyCardSystem:
                 flag_transactions=False) -> dict:
         raise NotImplementedError
 
-    def close(self, card_id, advisor_id, reason) -> dict:
-        raise NotImplementedError
-
     def report_lost_stolen(self, card_id, advisor_id, incident_type,
                            last_known_use=None, flag_transactions=False) -> dict:
         raise NotImplementedError

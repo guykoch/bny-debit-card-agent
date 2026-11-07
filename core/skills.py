@@ -22,7 +22,9 @@ from dataclasses import dataclass, field
 
 from core import schemas
 
-_DIR = os.path.join(os.path.dirname(__file__), "..", "skills", "debit-card")
+_ROOT = os.path.join(os.path.dirname(__file__), "..", "skills")
+_DIR = os.path.join(_ROOT, "debit-card")          # card actions (and _shared.md)
+_DIRS = [_DIR, os.path.join(_ROOT, "service-center")]   # + Service Center tickets
 _SHARED_FILE = "_shared.md"
 
 
@@ -33,6 +35,7 @@ class Skill:
     lookups: list[str] = field(default_factory=list)
     triggers: list[str] = field(default_factory=list)
     priority: int = 0               # higher wins when several match
+    kind: str = "action"            # action (changes a card) | ticket | lookup
     description: str = ""
     body: str = ""                  # the markdown below the frontmatter
 
@@ -65,8 +68,8 @@ def load() -> dict[str, Skill]:
     with open(os.path.join(_DIR, _SHARED_FILE), encoding="utf-8") as f:
         _SHARED = f.read()
 
-    for entry in sorted(os.listdir(_DIR)):
-        path = os.path.join(_DIR, entry, "SKILL.md")
+    for entry, path in sorted((e, os.path.join(d, e, "SKILL.md")) for d in _DIRS
+                              for e in os.listdir(d)):
         if not os.path.isfile(path):
             continue
         with open(path, encoding="utf-8") as f:
@@ -77,6 +80,7 @@ def load() -> dict[str, Skill]:
             lookups=[x.strip() for x in meta.get("lookups", "").split(",") if x.strip()],
             triggers=[x.strip().lower() for x in meta.get("triggers", "").split(",") if x.strip()],
             priority=int(meta.get("priority", 0)),
+            kind=meta.get("kind", "action"),
             description=meta.get("description", ""),
             body=body.strip(),
         )

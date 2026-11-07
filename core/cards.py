@@ -113,11 +113,59 @@ def address_input_card(title: str, question: str, extra: Optional[list[dict]] = 
     }
 
 
+# ---------------------------------------------------------------- Service Center tickets
+
+def check_form_card(title: str, question: str, rows: list[dict], max_rows: int,
+                    amount_required: bool, notice: str = "") -> dict:
+    """Check #, Amount, Date Written (MM/DD/YYYY) rows, with Add another check."""
+    return {"kind": "check_form", "title": title, "message": question,
+            "rows": rows or [{"check_number": "", "amount": "", "date_written": ""}],
+            "max_rows": max_rows, "amount_required": amount_required, "notice": notice,
+            "actions": [dict(CANCEL)]}
+
+
+def callback_card(question: str, value: Optional[dict] = None) -> dict:
+    """Call Back #: US (xxx-xxx-xxxx + ext) or Non-US. Saved for the advisor."""
+    return {"kind": "callback_form", "title": "Call Back #", "message": question,
+            "value": value or {"kind": "US", "number": "", "ext": ""},
+            "actions": [dict(CANCEL)]}
+
+
+def ticket_address_card(question: str, prefill: str = "", phone: str = "",
+                        notice: str = "", info: str = "") -> dict:
+    """New address (address search + apartment line) and/or New Phone #."""
+    card = {"kind": "ticket_address", "title": "New address", "message": question,
+            "prefill": prefill, "phone": phone, "actions": [dict(CANCEL)]}
+    if notice:
+        card["notice"] = notice
+    if info:
+        card["info"] = info
+    return card
+
+
+def fields_form_card(title: str, question: str, fields: list[dict], submit: str = "Continue",
+                     notice: str = "") -> dict:
+    """A few labelled boxes on one card: {id, label, value, required, multiline, placeholder}."""
+    return {"kind": "fields_form", "title": title, "message": question, "inputs": fields,
+            "submit": submit, "notice": notice, "actions": [dict(CANCEL)]}
+
+
+def check_status_card(title: str, fields: list[tuple[str, str]], status_line: str,
+                      actions: list[dict]) -> dict:
+    """A looked-up check, with what can be done next as buttons (read-only)."""
+    return {"kind": "check_status", "title": title, "message": status_line,
+            "fields": [{"label": k, "value": v} for k, v in fields],
+            "actions": [{**a, "style": a.get("style", "option")} for a in actions]}
+
+
 def to_text(card: dict) -> str:
     """Plain-text fallback. Same content, no rendering required."""
     if card is None:
         return ""
     lines = [card.get("title", "")]
+    if card.get("ticket"):
+        lines = [card["ticket"]["title"]]
+        card = {**card, "fields": []}
     if card.get("message"):
         lines.append(card["message"])
     for f in card.get("fields", []):
@@ -131,6 +179,21 @@ def to_text(card: dict) -> str:
     if card.get("kind") == "travel_form":
         lines.append(f"  Destinations: {', '.join(card.get('destinations') or []) or '-'}")
         lines.append(f"  Dates: {card.get('start') or '?'} to {card.get('end') or '?'}")
+    if card.get("kind") == "check_form":
+        for r in card.get("rows") or []:
+            lines.append(f"  Check #{r.get('check_number') or '?'}  Amount {r.get('amount') or '?'}"
+                         f"  Date written {r.get('date_written') or '-'}")
+    if card.get("kind") == "callback_form":
+        lines.append("  (type the Call Back #)")
+    if card.get("kind") == "fields_form":
+        for f in card.get("inputs") or []:
+            lines.append(f"  {f['label']}: {f.get('value') or ('(required)' if f.get('required') else '-')}")
+    if card.get("ticket"):
+        t = card["ticket"]
+        lines += [f"  {f['label']}: {f['value']}" for f in t.get("key", [])]
+        cb = (t.get("editable") or {}).get("callback") or {}
+        if cb.get("number"):
+            lines.append(f"  Call Back #: {cb['number']}")
     if card.get("text_input"):
         ti = card["text_input"]
         lines.append(f"  {ti.get('label', 'Text')}: {ti.get('value') or '(required)'}")

@@ -57,6 +57,31 @@ class Card:
 
 
 @dataclass
+class Account:
+    """A client's account that checks are written on (AMA or Resource Checking)."""
+    account_id: str
+    client_id: str
+    account_type: str                # "AMA" | "Resource Checking"
+    account_last4: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.account_type} ...{self.account_last4}"
+
+
+@dataclass
+class Check:
+    """One check written on an account."""
+    account_id: str
+    check_number: str
+    amount: str                      # "250.00"
+    date_written: str                # YYYY-MM-DD
+    payee: str = ""
+    status: str = "outstanding"      # outstanding | posted | stopped
+    posted_date: str = ""            # YYYY-MM-DD when posted
+
+
+@dataclass
 class ToolResponse:
     """
     What our agent returns for one tool call.

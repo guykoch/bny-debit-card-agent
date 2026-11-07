@@ -70,7 +70,7 @@ def _pending_rule(tool: str, card: Card) -> None:
     if card.status == "pending" and tool not in settings.PENDING_CARD_ACTIONS:
         allowed = " or ".join(sorted(
             {"lock_card": "lock it", "replace_card": "order a replacement (for example "
-             "if it never arrived)", "unlock_card": "unlock it", "close_card": "close it",
+             "if it never arrived)", "unlock_card": "unlock it",
              "report_lost_stolen": "report it lost or stolen",
              "travel_notice": "add a travel notice"}[t]
             for t in settings.PENDING_CARD_ACTIONS))
@@ -134,7 +134,7 @@ def _replace_precheck(ti, card, services):
         raise NotPossible(
             "address_not_in_profile",
             f"That address is not in {card.client_name}'s profile. Pick one of the "
-            "addresses on file, or add a new delivery address.")
+            "addresses on file. A new address needs an Address Update ticket first.")
     if match.country.upper() != "US" or not places.us_region(match.state):
         raise NotPossible("address_not_us",
                           "Replacement cards can only be sent to an address in the United "
@@ -166,56 +166,6 @@ def _replace_summary(ti, card):
         fields.append(("Flag recent transactions",
                        "yes" if ti.get("flag_transactions") else "no"))
     return fields, None
-
-
-# ---------------------------------------------------------------- close
-
-def _close_state(card):
-    _pending_rule("close_card", card)
-    if card.status == "closed":
-        raise NotPossible("card_closed", "That card is already closed.")
-
-
-def _close_execute(svc, session, ti, card):
-    return svc.cards.close(card.card_id, session.advisor_id, reason=ti["reason"])
-
-
-# Words that only describe the closing itself - never a reason (P-06).
-_NOT_REASONS = {"permanently", "permanent", "for good", "close", "closed", "closing", "cancel",
-                "cancelled", "now", "please", "asap", "today", "immediately", "the card", "card",
-                "it", "yes", "ok", "advisor request", "n/a", "na", "none", "-", "."}
-
-
-def close_reason_problem(reason: str) -> str | None:
-    """None when `reason` is a real reason; otherwise what is wrong with it."""
-    r = re.sub(r"\s+", " ", (reason or "").strip())
-    if not r:
-        return "Please type the reason for closing the card."
-    if len(r) > 200:
-        return "Please keep the reason under 200 characters."
-    words = [w for w in re.split(r"[^a-z']+", r.lower()) if w]
-    if r.lower() in _NOT_REASONS or (words and all(w in _NOT_REASONS for w in words)):
-        return f"'{r}' is not a reason. Please say why the card is being closed."
-    return None
-
-
-def _close_text_input(ti):
-    return {"name": "reason", "label": "Reason", "required": True,
-            "placeholder": "Reason for closing, e.g. switching banks",
-            "value": ti.get("reason") or ""}
-
-
-def _close_confirm_check(ti):
-    problem = close_reason_problem(ti.get("reason", ""))
-    if problem:
-        raise NotPossible("reason_required", problem)
-    ti["reason"] = re.sub(r"\s+", " ", ti["reason"].strip())
-
-
-def _close_summary(ti, card):
-    return (_base_fields(card),
-            "This closes the debit card permanently and cannot be undone. The account "
-            "stays open; a new card would have to be issued.")
 
 
 # ---------------------------------------------------------------- lost / stolen
@@ -306,59 +256,6 @@ def _travel_summary(ti, card):
     ], None
 
 
-# ---------------------------------------------------------------- update address (profile)
-
-ADDRESS_ACK = "The client asked for this change and I verified their identity."
-
-
-def _addr_precheck(ti, client, services):
-    if client is None:
-        raise BadRequest("Unknown client.")
-    country, state = ti["new_country"].upper(), ti["new_state"].upper()
-    if country != "US" or not places.us_region(state):
-        raise NotPossible("address_not_us", "Addresses must be in the United States or a "
-                                            "US territory.")
-    profile = services.clients.addresses(client.client_id)
-    new = places.normalise_address(ti["new_address"])
-    if any(places.normalise_address(a.address) == new for a in profile):
-        raise NotPossible("address_exists", "That address is already in the client's profile.")
-    if ti["mode"] == "change_profile_address":
-        labels = [a.label for a in profile]
-        if not ti.get("address_label") and len(labels) == 1:
-            ti["address_label"] = labels[0]
-        if ti.get("address_label") not in labels:
-            raise BadRequest("Which profile address should change?")
-
-
-def _addr_summary(ti, client, services=None):
-    fields = [("Client", client.name), ("Account", f"...{client.account_last4}")]
-    if ti["mode"] == "change_profile_address":
-        old = next((a.address for a in services.clients.addresses(client.client_id)
-                    if a.label == ti["address_label"]), "") if services else ""
-        fields += [("Change", ti["address_label"]), ("From", old), ("To", ti["new_address"])]
-        warning = ("This changes the address in the client's profile. Cards already ordered "
-                   "are not redirected.")
-    else:
-        fields += [("Add delivery address", ti["new_address"])]
-        warning = "This adds the address to the client's profile, so replacement cards can be sent there."
-    return fields, warning
-
-
-def _addr_execute(svc, session, ti, client):
-    from core.models import Address
-    new = Address(label="", address=ti["new_address"], state=ti["new_state"].upper(),
-                  country=ti["new_country"].upper())
-    if ti["mode"] == "change_profile_address":
-        svc.clients.change_address(client.client_id, ti["address_label"], new)
-        return {"status": "address_changed", "label": ti["address_label"],
-                "message": f"{client.name}'s {ti['address_label'].lower()} address is now "
-                           f"{ti['new_address']}."}
-    new.label = f"Delivery (added {us_date(date.today())})"
-    svc.clients.add_address(client.client_id, new)
-    return {"status": "address_added", "label": new.label,
-            "message": f"Delivery address added to {client.name}'s profile: {ti['new_address']}."}
-
-
 # ---------------------------------------------------------------- registry
 
 REPLACEMENT_OFFER = [{"label": "Yes, order a replacement", "value": "Yes, order a replacement"},
@@ -379,12 +276,6 @@ ACTIONS: dict[str, ActionSpec] = {
         title="Replace debit card", execute=_replace_execute,
         summary=_replace_summary, state_check=_replace_state, precheck=_replace_precheck),
 
-    "close_card": ActionSpec(
-        title="Close debit card permanently", execute=_close_execute,
-        summary=_close_summary, state_check=_close_state,
-        confirm_label="Close permanently", danger=True,
-        text_input=_close_text_input, confirm_check=_close_confirm_check),
-
     "report_lost_stolen": ActionSpec(
         title="Report card lost or stolen", execute=_lost_execute,
         summary=_lost_summary, state_check=_lost_state,
@@ -395,8 +286,10 @@ ACTIONS: dict[str, ActionSpec] = {
         title="Add travel notice", execute=_travel_execute,
         summary=_travel_summary, state_check=_travel_state, precheck=_travel_precheck),
 
-    "update_address": ActionSpec(
-        title="Update client address", execute=_addr_execute,
-        summary=_addr_summary, precheck=_addr_precheck,
-        confirm_label="Confirm address", danger=True, client_level=True, ack=ADDRESS_ACK),
 }
+
+
+# Service Center tickets (core/tickets.py): same five guardrail steps, but Send only
+# saves a ticket - nothing else changes.
+from core import tickets as _tickets  # noqa: E402  (needs ActionSpec above)
+ACTIONS.update(_tickets.action_specs())

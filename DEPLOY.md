@@ -118,7 +118,12 @@ falls back to the demo list automatically.
   in `convex-demo-db/`, also run `npx convex deploy` from that folder.
 - **Changed a setting in Vercel:** redeploy (Deployments → ⋯ → Redeploy).
 - **See the data:** Convex dashboard → Production → **Data** (tables `cards`,
-  `addresses`, `travel_notices`, `conversations`, `defaults`, and the two audit logs).
+  `addresses`, `travel_notices`, `conversations`, `defaults`, `tickets`,
+  `advisor_settings`, and the two audit logs). Ticket attachments are under **Files**.
+- **Tickets:** `tickets` holds every Service Center ticket sent (SR #, form fields,
+  attachments). Sending a ticket changes nothing else. Reset clears tickets and their
+  files. Attachments upload from the browser straight to Convex file storage (not
+  through Vercel), so the 10 MB limit is not affected by Vercel's request size.
 - **Audit:** two tables that sit next to each other in the Data list:
   - `audit_actions`: one row per card action, done or stopped (Completed / Refused /
     Not permitted), with client, card, the details from the confirmation card and the

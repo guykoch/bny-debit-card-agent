@@ -1,14 +1,15 @@
 # One skill per action
 
-Six skills, one for each card action, plus `_shared.md` holding the rules they
-all obey.
+Five skills, one for each card action, plus `_shared.md` holding the rules they
+all obey. (Closing a card was removed: a card is never closed on its own;
+replacing it closes the old card. Address changes are now a Service Center
+ticket, see `skills/service-center/`.)
 
 ```
-_shared.md                  rules every skill inherits — one copy, not six
+_shared.md                  rules every skill inherits — one copy, not five
 lock-card/SKILL.md
 unlock-card/SKILL.md
 replace-card/SKILL.md
-close-card/SKILL.md
 report-lost-stolen/SKILL.md
 travel-notice/SKILL.md
 ```

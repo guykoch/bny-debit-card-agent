@@ -16,7 +16,7 @@ import difflib
 from typing import Optional
 
 from config import settings
-from core.models import Address, Card, Client
+from core.models import Account, Address, Card, Check, Client
 from integrations.mock import dataset as data
 
 
@@ -144,11 +144,6 @@ class MockCardSystem:
         return {"status": "replacement_ordered", "new_card_id": new_id,
                 "message": f"Replacement ordered, delivering to {delivery_address}.{extra}"}
 
-    def close(self, card_id, advisor_id, reason) -> dict:
-        self._cards[card_id].status = "closed"
-        return {"status": "closed",
-                "message": f"Card ending {self._cards[card_id].card_last4} is closed permanently."}
-
     def report_lost_stolen(self, card_id, advisor_id, incident_type,
                            last_known_use=None, flag_transactions=False) -> dict:
         self._cards[card_id].status = "locked"
@@ -164,3 +159,77 @@ class MockCardSystem:
         return {"status": "travel_notice_added",
                 "message": f"Travel notice added for {', '.join(destination)}, "
                            f"{us_range(start_date, end_date)}."}
+
+
+# ---------------------------------------------------------------- checks and tickets
+
+class MockCheckSystem:
+    """Accounts and checks from accounts.csv / checks.csv. Read-only."""
+    def __init__(self):
+        self._accounts = [Account(**a) for a in data.ACCOUNTS]
+        self._checks = [Check(**c) for c in data.CHECKS]
+
+    def accounts(self, client_id: str) -> list[Account]:
+        return [a for a in self._accounts if a.client_id == client_id]
+
+    def account(self, account_id: str) -> Optional[Account]:
+        return next((a for a in self._accounts if a.account_id == account_id), None)
+
+    def find_check(self, account_id: str, check_number: str) -> Optional[Check]:
+        num = str(check_number).lstrip("0")
+        return next((c for c in self._checks if c.account_id == account_id
+                     and c.check_number.lstrip("0") == num), None)
+
+    def checks(self, account_id: str) -> list[Check]:
+        return [c for c in self._checks if c.account_id == account_id]
+
+
+def next_ticket_id(existing: int) -> str:
+    return f"SR-{10234 + existing}"
+
+
+class MemoryServiceCenter:
+    """Tickets in this process (the hosted demo keeps them in Convex)."""
+    def __init__(self):
+        self.tickets: list[dict] = []
+
+    def submit(self, ticket: dict) -> dict:
+        for t in self.tickets:
+            if ticket.get("draft_id") and t.get("draft_id") == ticket["draft_id"]:
+                return {**t, "duplicate": True}
+        saved = {**ticket, "ticket_id": next_ticket_id(len(self.tickets)), "status": "Submitted"}
+        self.tickets.append(saved)
+        return saved
+
+    def list_for_advisor(self, advisor_id: str) -> list[dict]:
+        return [t for t in reversed(self.tickets) if t.get("advisor_id") == advisor_id]
+
+
+class MemoryAdvisorSettings:
+    def __init__(self):
+        self._rows: dict[str, dict] = {}
+
+    def get(self, advisor_id: str) -> dict:
+        return dict(self._rows.get(advisor_id, {}))
+
+    def set(self, advisor_id: str, key: str, value) -> None:
+        self._rows.setdefault(advisor_id, {})[key] = value
+
+
+class MemoryFileStore:
+    """Attachments for the local server: the browser posts the file to /api/tickets/upload."""
+    def __init__(self):
+        self.files: dict[str, dict] = {}
+
+    def upload_target(self) -> dict:
+        return {"url": "/api/tickets/upload"}
+
+    def put(self, data_bytes: bytes, content_type: str) -> str:
+        sid = f"local-{len(self.files) + 1}"
+        self.files[sid] = {"size": len(data_bytes), "contentType": content_type,
+                           "bytes": data_bytes}
+        return sid
+
+    def meta(self, storage_id: str) -> Optional[dict]:
+        f = self.files.get(storage_id)
+        return {"size": f["size"], "contentType": f["contentType"]} if f else None

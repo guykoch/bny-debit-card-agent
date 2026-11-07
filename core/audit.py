@@ -35,8 +35,9 @@ REFUSED = ("refused", "not_entitled")
 
 ACTION_NAMES = {
     "lock_card": "Lock card", "unlock_card": "Unlock card", "replace_card": "Replace card",
-    "close_card": "Close card permanently", "report_lost_stolen": "Report lost or stolen",
-    "travel_notice": "Add travel notice", "update_address": "Update address",
+    "report_lost_stolen": "Report lost or stolen", "travel_notice": "Add travel notice",
+    "stop_payment": "Ticket: Stop Payment", "check_copy": "Ticket: Check Copy",
+    "address_update": "Ticket: Address Update", "misc_request": "Ticket: Misc request",
 }
 
 
