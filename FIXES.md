@@ -146,6 +146,12 @@ Checks: `python -m tests.test_tickets` (and every other suite, updated).
 | F-57 | Close removed. A close request gets a fixed reply: a debit card can't be closed on its own; Replace / Lock buttons. "Cancel it" with no card or check word asks: a check or the card? | llm_runtime `CLOSE_REPLY`, `_CLOSE_WORDS`, `_CANCEL_ONLY` |
 | F-58 | Actions menu in two sections, Do it now / Send a ticket (with a note); on a phone the ticket section opens with a tap. Admin menu replaces the advisor list: Advisor ID and **Active Tickets** (SR #, ticket, client, date, status; tap a row for the details). | web/index.html `renderChoice`, `openTickets`; `GET /api/tickets` |
 
+"Did you mean" suggestions show each check's status (Not paid yet / Paid 10/23/2026) and
+only offer checks the ticket can use: unpaid for a Stop Payment, paid for a Check Copy
+(llm_runtime `_ticket_checks`, `_check_state`).
+
+| F-59 | Active Tickets: each attachment has a **View** button that opens the file in a new tab. The server first checks the file is attached to that advisor's own ticket; on the hosted demo it returns a short-lived Convex link (`fileUrl`), locally the file itself. | web/index.html `viewAttachment`, `GET /api/tickets/file`, `convex/demo.ts` `fileUrl` |
+
 Retired with close: F-35, F-36 and tests T-08a (now 5 replacements, the 6th refused),
 T-15a, T-35a/b, T-36a/b. Old update-address tests T-28a-g rewritten for the ticket.
 

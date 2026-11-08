@@ -233,3 +233,10 @@ class MemoryFileStore:
     def meta(self, storage_id: str) -> Optional[dict]:
         f = self.files.get(storage_id)
         return {"size": f["size"], "contentType": f["contentType"]} if f else None
+
+    def view_url(self, storage_id: str) -> Optional[str]:
+        """Where the browser reads the file (behind the passcode, like every /api call)."""
+        return f"/api/tickets/file/raw?id={storage_id}" if storage_id in self.files else None
+
+    def get(self, storage_id: str) -> Optional[dict]:
+        return self.files.get(storage_id)

@@ -6,6 +6,7 @@
   "request": "Address Update",
   "request_type": "AMA/Resource Checking Account",
   "note": "Either the phone number or address are required.",
+  "note_on_review": false,
   "fields": [
     {
       "id": "account_id",

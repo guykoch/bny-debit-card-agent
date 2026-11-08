@@ -169,6 +169,13 @@ def _edits(a: str, b: str) -> int:
     return d[len(a)][len(b)]
 
 
+def _check_state(c) -> str:
+    """A check's status in plain words, for the buttons."""
+    if c.status == "posted":
+        return f"Paid {us_date(c.posted_date)}" if c.posted_date else "Paid"
+    return "Stopped" if c.status == "stopped" else "Not paid yet"
+
+
 def _close(typed: str, real: str) -> bool:
     """Same word with a small typo: 1 letter off for short words, 2 for longer ones."""
     typed, real = typed.lower(), real.lower()
@@ -1439,8 +1446,10 @@ class GptConversation:
                                          "value": "__ticket__:stop_payment"},
                                         {"label": "No, thanks", "value": "__no__"}])
             elif not r.get("keep"):
+                # Only checks this ticket can use: unpaid for a Stop Payment, paid for a copy.
+                usable = "outstanding" if tool == "stop_payment" else "posted"
                 near = [c for c in self.services.checks.checks(acct)
-                        if _edits(num, c.check_number) == 1]
+                        if _edits(num, c.check_number) == 1 and c.status == usable]
                 near.sort(key=lambda c: abs(int(c.check_number) - int(num))   # closest first
                           if c.check_number.isdigit() and num.isdigit() else 0)
                 if near:
@@ -1448,7 +1457,8 @@ class GptConversation:
                                      f"Check {num} isn't on this account. Did you mean "
                                      + ("this check?" if len(near) == 1 else "one of these?"),
                                      [{"label": f"Check {c.check_number} · {T.money(c.amount)} · "
-                                                f"written {us_date(c.date_written)}",
+                                                f"written {us_date(c.date_written)} · "
+                                                f"{_check_state(c)}",
                                        "value": f"{i}|{c.check_number}"} for c in near[:3]]
                                      + [{"label": f"No, keep {num}", "value": f"{i}|keep"}])
         need_amount = tool == "stop_payment"
@@ -1693,7 +1703,7 @@ class GptConversation:
                 return self._ask("ticket_status_fix", "Did you mean?",
                                  f"Check {d['check_number']} isn't on {acct.label}. Did you mean "
                                  f"check {c.check_number}?",
-                                 [{"label": f"Yes, check {c.check_number}",
+                                 [{"label": f"Yes, check {c.check_number} · {_check_state(c)}",
                                    "value": c.check_number}])
             return self._stop(f"Check {d['check_number']} was not found on {acct.label}.",
                               "check_not_found")

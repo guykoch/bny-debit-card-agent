@@ -141,3 +141,7 @@ class FileStore(Protocol):
     def meta(self, storage_id: str) -> Optional[dict]:
         """{"size": bytes, "contentType": ...} or None if there is no such file."""
         ...
+
+    def view_url(self, storage_id: str) -> Optional[str]:
+        """A link the browser can open to view the file, or None."""
+        ...

@@ -378,6 +378,18 @@ export const fileMeta = query({
   },
 });
 
+// A link to one attached file, for Active Tickets -> View. The server only asks for
+// it after checking that the ticket belongs to the advisor.
+export const fileUrl = query({
+  args: { secret: v.string(), storage_id: v.string() },
+  handler: async (ctx, { secret, storage_id }) => {
+    checkSecret(secret);
+    const id = ctx.db.system.normalizeId("_storage", storage_id);
+    if (!id) return null;
+    return await ctx.storage.getUrl(id);
+  },
+});
+
 // ------------------------------------------------------------------ default state and reset
 
 // Called by the server on start-up. Saves the default cards (from cards.csv)

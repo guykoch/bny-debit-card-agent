@@ -84,6 +84,9 @@ def run():
     check("T-55d", "numbers are never guessed: 'Did you mean' with nearby checks",
           "Did you mean" in r.card["message"] and "1044" in labels(r)[0]
           and any("keep" in l.lower() for l in labels(r)))
+    check("T-55d", "Stop Payment suggests only unpaid checks, status on each button",
+          all("Not paid yet" in l for l in labels(r)[:-1])
+          and not any("1042" in l or "1041" in l for l in labels(r)))
     r = conv.send(values(r)[0])
     if kind(r) == "callback_form":
         r = conv.send(CB)
@@ -96,6 +99,13 @@ def run():
     r = conv.send("Jane Miller needs a copy of check 1043")
     check("T-55e", "copy of an unpaid check: offers to stop it instead",
           "Stop this payment" in labels(r))
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Jane Miller needs a copy of check 1040")
+    r = conv.send(values(r)[0])
+    check("T-55e", "Check Copy suggests only paid checks, with the date paid",
+          labels(r)[:2] == ["Check 1041 · $1,200.00 · written 10/15/2026 · Paid 10/18/2026",
+                            "Check 1042 · $86.40 · written 10/21/2026 · Paid 10/23/2026"]
+          and not any("1043" in l or "1044" in l for l in labels(r)))
     svc, conv = fresh(CodeOnly())
     r = conv.send("Did Jane Miller's check 1043 clear?")
     check("T-55f", "look-up: amount, date in US format, status, and next steps as buttons",
@@ -110,6 +120,8 @@ def run():
     conv.send("Jane Miller moved, change her address")
     conv.send("ticket_address:" + json.dumps({"pick": hit, "unit": "", "phone": ""}))
     r = conv.send(CB)
+    check("T-55g", "review card: no red 'phone or address required' note (already met)",
+          not r.card["ticket"]["note"])
     conv.send("confirm")
     check("T-55g", "Address Update: a ticket, the profile is not changed",
           svc.tickets.list_for_advisor("ADV-1234")[0]["ticket"] == "Address Update"
@@ -178,6 +190,29 @@ def run():
     code, _, body = a2a_server.route("POST", "/api/tickets/upload",
                                      {"Content-Type": "application/pdf"}, b"%PDF")
     check("T-55r", "upload returns a storage id", code == 200 and json.loads(body)["storageId"])
+
+    print("\nF-59  Active Tickets: View an attachment")
+    a2a_server.reset_memory()
+    store = a2a_server.services()
+    sid = store.files.put(b"%PDF-1.4 demo", "application/pdf")
+    r = dispatch(store, Session(advisor_id="ADV-1234"), "stop_payment",
+                 {**base, "draft_id": "v1", "attachments": [{"storage_id": sid, "name": "letter.pdf"}]},
+                 confirmed=True)
+    tid = r.data["ticket_id"]
+    code, _, body = a2a_server.route(
+        "GET", f"/api/tickets/file?advisor=ADV-1234&ticket={tid}&id={sid}", {}, b"")
+    out = json.loads(body)
+    check("T-59a", "the advisor's own attachment: a link to view it",
+          code == 200 and out["url"] and out["name"] == "letter.pdf")
+    code, kind_, raw = a2a_server.route("GET", out["url"], {}, b"")
+    check("T-59a", "the link returns the file itself", code == 200
+          and kind_ == "application/pdf" and raw.startswith(b"%PDF"))
+    code, _, _ = a2a_server.route(
+        "GET", f"/api/tickets/file?advisor=ADV-5678&ticket={tid}&id={sid}", {}, b"")
+    check("T-59b", "another advisor can't open it", code == 404)
+    code, _, _ = a2a_server.route(
+        "GET", f"/api/tickets/file?advisor=ADV-1234&ticket={tid}&id=local-999", {}, b"")
+    check("T-59b", "a file not attached to that ticket can't be opened", code == 404)
 
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     return 1 if FAIL else 0

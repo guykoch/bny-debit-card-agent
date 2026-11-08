@@ -339,7 +339,9 @@ def review(t: dict, ti: dict, client, services) -> dict:
                      "subject_required": t["tool"] == "misc_request",
                      "info_required": t["tool"] == "misc_request"},
         "all": [{"label": k, "value": v} for k, v in ticket_fields(t, ti, client, account)],
-        "note": t.get("note", ""),
+        # A note about filling in the form (e.g. "address or phone required") is already
+        # satisfied by the time the review card shows, so it is left off there.
+        "note": t.get("note", "") if t.get("note_on_review", True) else "",
         "rule": t.get("common_note", ""),
         "warnings": notes,
         "attachments": {"max": MAX_ATTACHMENTS, "max_mb": 10, "types": "PDF, JPG or PNG",

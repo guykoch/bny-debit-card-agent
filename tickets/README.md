@@ -9,6 +9,9 @@ sends the ticket. Sending a ticket changes nothing else.
 - `fields`: the form's fields, with their labels, in form order.
 - `ask_order`: the order the chat asks for missing required fields (one card per topic).
 - `one_of`: at least one of these must be filled (Address Update: address or phone).
+- `note`: the form's red note, shown on the review card. `note_on_review: false` leaves it
+  off when it is only about filling in the form and is already met by then (Address
+  Update's "Either the phone number or address are required.").
 
 To connect BNY: map each field `id` to the Service Center API field of the same
 form. Adding a form = adding a file here, a tools/<tool>.json schema and a skill

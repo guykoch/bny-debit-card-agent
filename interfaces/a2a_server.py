@@ -26,6 +26,9 @@ Endpoints
                             comes from the NetX360 sign-in)
     POST /api/tickets/upload-url   where the browser uploads one attachment
     POST /api/tickets/upload       (local server only) the upload itself
+    GET  /api/tickets/file  a link to one attachment (?advisor=&ticket=&id=), only for a
+                            file attached to that advisor's own ticket
+    GET  /api/tickets/file/raw     (local server only) the file itself
     /api/demo/*             demo-only tools (passcode, reset) - see demo_tools/
 """
 
@@ -239,6 +242,22 @@ def route(method: str, path: str, headers, body: bytes):
         if advisor not in dataset.GRANTS:
             return js(400, {"status": "error", "message": "Unknown advisor."})
         return js(200, {"tickets": services().tickets.list_for_advisor(advisor)})
+    if method == "GET" and path == "/api/tickets/file":
+        advisor, tid, sid = params.get("advisor", ""), params.get("ticket", ""), params.get("id", "")
+        ticket = next((t for t in services().tickets.list_for_advisor(advisor)
+                       if t.get("ticket_id") == tid), None) if advisor in dataset.GRANTS else None
+        att = next((a for a in (ticket or {}).get("attachments") or []
+                    if a.get("storage_id") == sid), None)
+        url = services().files.view_url(sid) if att else None
+        if not url:
+            return js(404, {"status": "error", "message": "That file was not found."})
+        return js(200, {"url": url, "name": att.get("name", ""), "type": att.get("type", "")})
+    if method == "GET" and path == "/api/tickets/file/raw":
+        store = services().files
+        f = store.get(params.get("id", "")) if hasattr(store, "get") else None
+        if not f:
+            return js(404, {"status": "error", "message": "That file was not found."})
+        return 200, f["contentType"] or "application/octet-stream", f["bytes"]
     if method == "POST" and path == "/api/tickets/upload-url":
         return js(200, services().files.upload_target())
     if method == "POST" and path == "/api/tickets/upload":

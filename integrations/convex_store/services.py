@@ -169,3 +169,7 @@ class ConvexFileStore:
 
     def meta(self, storage_id: str):
         return self.client.query("fileMeta", storage_id=storage_id)
+
+    def view_url(self, storage_id: str):
+        """A short-lived Convex link to the file (the browser opens it directly)."""
+        return self.client.query("fileUrl", storage_id=storage_id)

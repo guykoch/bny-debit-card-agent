@@ -242,6 +242,8 @@
   .att { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 0; }
   .att span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .att button { border: 0; background: transparent; color: var(--hint); cursor: pointer; font-size: 15px; }
+  .att button.linkb { color: var(--blue); font-size: 13px; font-weight: 600; }
+  .att span.err { flex: none; }
   .attnote { font-size: 11px; color: var(--hint); margin-top: 2px; }
   @media (max-width: 600px) {
     .grp.collapsible .grph { cursor: pointer; }
@@ -1065,6 +1067,28 @@ function renderTicketReview(card) {
   return c;
 }
 
+// Opens one attachment in a new tab. The server checks the file belongs to this
+// advisor's ticket and returns a link (Convex) or the file itself (local server).
+async function viewAttachment(t, a, err) {
+  err.textContent = "";
+  const w = window.open("", "_blank");               // opened now, so it isn't blocked as a pop-up
+  try {
+    const q = `advisor=${encodeURIComponent(advisorSel.value)}&ticket=${encodeURIComponent(t.ticket_id)}&id=${encodeURIComponent(a.storage_id)}`;
+    const res = await fetch(`/api/tickets/file?${q}`, { headers: demoHeaders() });
+    const out = await res.json();
+    if (!res.ok || !out.url) throw new Error(out.message || "not found");
+    if (out.url.startsWith("/")) {                    // local server: fetch with the passcode
+      const f = await fetch(out.url, { headers: demoHeaders() });
+      if (!f.ok) throw new Error("not found");
+      const url = URL.createObjectURL(await f.blob());
+      if (w) w.location = url; else window.open(url, "_blank");
+    } else if (w) w.location = out.url; else window.open(out.url, "_blank");
+  } catch (e) {
+    if (w) w.close();
+    err.textContent = " The file could not be opened.";
+  }
+}
+
 // Admin menu -> Active Tickets: this advisor's tickets; tap a row for the details.
 function openTickets() {
   $("admmenu").classList.remove("open");
@@ -1098,8 +1122,18 @@ function openTickets() {
       .concat((t.fields || []).map(x => [x.label, x.value]))
       .filter(([, v]) => v)
       .forEach(([k, v]) => f.appendChild(el("div", null, `<span>${esc(k)}</span><span>${esc(v)}</span>`)));
-    (t.attachments || []).forEach(a => f.appendChild(el("div", null, `<span>Attachment</span><span>${esc(a.name)}</span>`)));
     d.appendChild(f);
+    if ((t.attachments || []).length) {                 // Attachments: View opens the file
+      const box = el("div", "fields"); box.appendChild(el("div", null, "<span>Attachments</span><span></span>"));
+      t.attachments.forEach(a => {
+        const row = el("div", "att", `<span>${esc(a.name)}</span>`);
+        const view = el("button", "linkb", "View"); view.type = "button";
+        const err = el("span", "err"); err.style.fontSize = "12px";
+        view.onclick = () => viewAttachment(t, a, err);
+        row.append(view, err); box.appendChild(row);
+      });
+      d.appendChild(box);
+    }
     bd.append(back, d);
   }
   fetch(`/api/tickets?advisor=${encodeURIComponent(advisorSel.value)}`, { headers: demoHeaders() })
