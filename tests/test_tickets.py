@@ -82,8 +82,14 @@ def run():
           r.card["title"] == "Which account?" and len(values(r)) == 2)
     r = conv.send(values(r)[0])
     check("T-55d", "numbers are never guessed: 'Did you mean' with nearby checks",
-          "Did you mean" in r.card["message"] and any("1043" in l for l in labels(r))
+          "Did you mean" in r.card["message"] and "1044" in labels(r)[0]
           and any("keep" in l.lower() for l in labels(r)))
+    r = conv.send(values(r)[0])
+    if kind(r) == "callback_form":
+        r = conv.send(CB)
+    check("T-55d", "picking 1044: the review card and the subject follow the fix",
+          "1044" in json.dumps(r.card["ticket"]["key"])
+          and r.card["ticket"]["editable"]["subject"].endswith("1044"))
 
     print("\nF-55  Check Copy, check look-up")
     svc, conv = fresh(CodeOnly())

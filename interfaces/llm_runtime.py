@@ -1441,6 +1441,8 @@ class GptConversation:
             elif not r.get("keep"):
                 near = [c for c in self.services.checks.checks(acct)
                         if _edits(num, c.check_number) == 1]
+                near.sort(key=lambda c: abs(int(c.check_number) - int(num))   # closest first
+                          if c.check_number.isdigit() and num.isdigit() else 0)
                 if near:
                     return self._ask("check_fix", "Did you mean?",
                                      f"Check {num} isn't on this account. Did you mean "
@@ -1551,7 +1553,13 @@ class GptConversation:
                 if v == "keep":
                     rows[int(i)]["keep"] = True
                 else:
+                    old = rows[int(i)]["check_number"]
                     rows[int(i)]["check_number"] = v
+                    auto = f"{T.template(self._ticket_tool())['title']}: check "
+                    if (d.get("subject") or "").startswith(auto):   # our own subject: follow the fix
+                        d["subject"] = auto + ", ".join(r["check_number"] for r in rows)
+                    if d.get("additional_info"):
+                        d["additional_info"] = re.sub(rf"\b{re.escape(old)}\b", v, d["additional_info"])
         elif field == "ticket_status_fix":
             d["check_number"] = value
         self._note(f"the advisor chose {label}.")
