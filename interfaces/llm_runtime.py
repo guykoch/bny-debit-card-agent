@@ -864,6 +864,8 @@ class GptConversation:
             return ToolResponse(status="needs_input", message="What would you like to do?")
 
         # 0. Fixed buttons and questions, all answered by code (no AI).
+        if low in ("cancel", "never mind", "nevermind") and self.pending:
+            low = "__cancel__"                               # typed instead of the Cancel button
         if low == "__cancel__":                              # P-12: Cancel on every card
             self.pending, self.task = None, None
             self.history.append({"role": "user", "content": "Cancel"})
@@ -1416,6 +1418,24 @@ class GptConversation:
             "number (at least one).", prefill=typed, phone=d.get("new_phone", ""),
             notice=notice, info=info), "address")
 
+    _PENDING_WORDS = {"stop_payment": ("A stop payment for check {n} is already pending",
+                                       "Stop payment pending"),
+                      "check_copy": ("A copy of check {n} was already requested",
+                                     "Copy requested")}
+
+    def _pending_request(self, tool: str, account_id: str, number: str) -> str | None:
+        """
+        A Submitted ticket of this kind for this check, in plain words, or None. Another
+        advisor's ticket is mentioned without its SR # (their tickets stay theirs).
+        """
+        if tool not in self._PENDING_WORDS or not account_id or not number:
+            return None
+        found = self.services.tickets.open_for_check(account_id, str(number), tool) or []
+        if not found:
+            return None
+        mine = next((t for t in found if t.get("advisor_id") == self.session.advisor_id), None)
+        return f"SR {mine['ticket_id']}" if mine else "by another advisor"
+
     def _ticket_checks(self) -> ToolResponse | None:
         """Each check is looked up first: paid, already stopped, or a near number."""
         tool, d = self._ticket_tool(), self.task["draft"]
@@ -1461,6 +1481,18 @@ class GptConversation:
                                                 f"{_check_state(c)}",
                                        "value": f"{i}|{c.check_number}"} for c in near[:3]]
                                      + [{"label": f"No, keep {num}", "value": f"{i}|keep"}])
+        # A request already pending for the same check: say so, and send another only on a click.
+        for r in rows:
+            num = str(r.get("check_number") or "")
+            if not num or num in (d.get("_dup_ok") or []):
+                continue
+            pend = self._pending_request(tool, acct, num)
+            if pend:
+                what = self._PENDING_WORDS[tool][0].format(n=num)
+                where = f" ({pend.replace('SR ', '')})" if pend.startswith("SR ") else f" ({pend})"
+                return self._ask("ticket_dup", "Already requested",
+                                 f"{what}{where}. Send another one?",
+                                 [{"label": "Send another", "value": num}])
         need_amount = tool == "stop_payment"
         if not rows or any(not r.get("check_number") or (need_amount and not r.get("amount"))
                            for r in rows):
@@ -1570,6 +1602,8 @@ class GptConversation:
                         d["subject"] = auto + ", ".join(r["check_number"] for r in rows)
                     if d.get("additional_info"):
                         d["additional_info"] = re.sub(rf"\b{re.escape(old)}\b", v, d["additional_info"])
+        elif field == "ticket_dup":                     # "Send another" despite a pending one
+            d.setdefault("_dup_ok", []).append(str(value))
         elif field == "ticket_status_fix":
             d["check_number"] = value
         self._note(f"the advisor chose {label}.")
@@ -1714,11 +1748,17 @@ class GptConversation:
         if c["status"] == "posted":
             line = f"Paid on {us_date(c['posted_date'])}."
             acts = [{"label": "Request a copy", "value": "__ticket__:check_copy"}]
+            pend = self._pending_request("check_copy", d["account_id"], c["check_number"])
         elif c["status"] == "stopped":
-            line, acts = "A stop payment is on file.", []
+            line, acts, pend = "A stop payment is on file.", [], None
         else:
             line = "Not paid yet."
             acts = [{"label": "Stop this payment", "value": "__ticket__:stop_payment"}]
+            pend = self._pending_request("stop_payment", d["account_id"], c["check_number"])
+        if pend:                                        # already requested: say so, no button
+            word = "Copy requested" if c["status"] == "posted" else "Stop payment pending"
+            line = f"{line.rstrip('.')} · {word} ({pend.replace('SR ', '')})."
+            acts = []
         acts.append({"label": "Done", "value": "__no__"})
         panel = cards.check_status_card(
             f"Check {c['check_number']}",

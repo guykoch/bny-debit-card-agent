@@ -102,13 +102,16 @@ export default defineSchema({
     client_id: v.string(),
     client_name: v.string(),
     account: v.string(), // "AMA ...8821"
+    account_id: v.optional(v.string()), // "ACC-8821" (to find a pending request for a check)
+    check_numbers: v.optional(v.array(v.string())), // Stop Payment / Check Copy
     fields: v.array(v.object({ label: v.string(), value: v.string() })),
     attachments: v.array(v.any()), // {storage_id, name, size, type}
     when: v.string(), // "11/07/2026 3:45:12 PM ET"
     at: v.number(),
   })
     .index("by_advisor", ["advisor_id", "at"])
-    .index("by_draft", ["draft_id"]),
+    .index("by_draft", ["draft_id"])
+    .index("by_account", ["account_id"]),
 
   // Small per-advisor preferences, e.g. the saved Call Back # for tickets.
   advisor_settings: defineTable({ advisor_id: v.string(), settings: v.any() }).index(

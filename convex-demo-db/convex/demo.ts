@@ -303,6 +303,8 @@ export const addTicket = mutation({
       client_id: str(ticket.client_id),
       client_name: str(ticket.client_name),
       account: str(ticket.account),
+      account_id: str(ticket.account_id),
+      check_numbers: (ticket.check_numbers ?? []).map((n: unknown) => str(n)),
       fields: (ticket.fields ?? []).map((f: { label: unknown; value: unknown }) => ({
         label: str(f.label),
         value: str(f.value),
@@ -313,6 +315,23 @@ export const addTicket = mutation({
     };
     await ctx.db.insert("tickets", doc);
     return doc;
+  },
+});
+
+// Submitted Stop Payment / Check Copy tickets for one check, any advisor. The
+// chat warns before a second request for the same check.
+export const openTicketsForCheck = query({
+  args: { secret: v.string(), account_id: v.string(), check_number: v.string(), tool: v.string() },
+  handler: async (ctx, { secret, account_id, check_number, tool }) => {
+    checkSecret(secret);
+    const docs = await ctx.db
+      .query("tickets")
+      .withIndex("by_account", (q) => q.eq("account_id", account_id))
+      .order("desc")
+      .collect();
+    return docs
+      .filter((t) => t.tool === tool && t.status === "Submitted" && (t.check_numbers ?? []).includes(check_number))
+      .map((t) => ({ ticket_id: t.ticket_id, advisor_id: t.advisor_id }));
   },
 });
 

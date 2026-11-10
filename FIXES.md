@@ -152,6 +152,8 @@ only offer checks the ticket can use: unpaid for a Stop Payment, paid for a Chec
 
 | F-59 | Active Tickets: each attachment has a **View** button that opens the file in a new tab. The server first checks the file is attached to that advisor's own ticket; on the hosted demo it returns a short-lived Convex link (`fileUrl`), locally the file itself. | web/index.html `viewAttachment`, `GET /api/tickets/file`, `convex/demo.ts` `fileUrl` |
 
+| F-60 | A request already pending for the same check: before the review card, "A stop payment for check 1043 is already pending (SR-10234). Send another one?" with Send another / Cancel (same for Check Copy: "already requested"). The look-up card says "Stop payment pending (SR-10234)" and hides the Stop this payment button. Another advisor's pending ticket is mentioned without its SR #. Typing "cancel" on any open card now cancels, like the button. | llm_runtime `_pending_request`, `_ticket_checks`, `_check_status`; `open_for_check` (memory and Convex `openTicketsForCheck`); tickets now store `account_id`, `check_numbers` |
+
 Retired with close: F-35, F-36 and tests T-08a (now 5 replacements, the 6th refused),
 T-15a, T-35a/b, T-36a/b. Old update-address tests T-28a-g rewritten for the ticket.
 

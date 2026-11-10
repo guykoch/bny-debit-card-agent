@@ -204,6 +204,14 @@ class MemoryServiceCenter:
     def list_for_advisor(self, advisor_id: str) -> list[dict]:
         return [t for t in reversed(self.tickets) if t.get("advisor_id") == advisor_id]
 
+    def open_for_check(self, account_id: str, check_number: str, tool: str) -> list[dict]:
+        """Submitted tickets of this kind for this check (any advisor), newest first."""
+        return [{"ticket_id": t["ticket_id"], "advisor_id": t.get("advisor_id", "")}
+                for t in reversed(self.tickets)
+                if t.get("tool") == tool and t.get("account_id") == account_id
+                and str(check_number) in (t.get("check_numbers") or [])
+                and t.get("status") == "Submitted"]
+
 
 class MemoryAdvisorSettings:
     def __init__(self):

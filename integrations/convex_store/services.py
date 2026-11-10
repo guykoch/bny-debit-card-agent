@@ -147,6 +147,10 @@ class ConvexServiceCenter:
     def list_for_advisor(self, advisor_id: str) -> list[dict]:
         return self.client.query("listTickets", advisor_id=advisor_id)
 
+    def open_for_check(self, account_id: str, check_number: str, tool: str) -> list[dict]:
+        return self.client.query("openTicketsForCheck", account_id=account_id,
+                                 check_number=str(check_number), tool=tool)
+
 
 class ConvexAdvisorSettings:
     def __init__(self, client: ConvexClient):

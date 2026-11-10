@@ -364,6 +364,8 @@ def _execute(t):
             "request_type": _request_type(t, account),
             "client_id": client.client_id, "client_name": client.name,
             "account": account.label if account else "",
+            "account_id": account.account_id if account else "",
+            "check_numbers": [str(r.get("check_number", "")) for r in ti.get("checks") or []],
             "fields": [{"label": k, "value": v} for k, v in ticket_fields(t, ti, client, account)],
             "attachments": ti.get("attachments") or [],
             "when": us_timestamp(now), "at": int(now.timestamp() * 1000),

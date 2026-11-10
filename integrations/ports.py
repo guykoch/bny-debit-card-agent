@@ -118,6 +118,10 @@ class ServiceCenter(Protocol):
         """Save the ticket. Same draft_id twice returns the first ticket (no duplicates)."""
         ...
 
+    def open_for_check(self, account_id: str, check_number: str, tool: str) -> list[dict]:
+        """Submitted tickets of this kind for one check, any advisor: [{ticket_id, advisor_id}]."""
+        ...
+
     def list_for_advisor(self, advisor_id: str) -> list[dict]:
         """This advisor's tickets, newest first."""
         ...

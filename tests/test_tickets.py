@@ -22,7 +22,7 @@ from core.guardrails import dispatch
 from core.models import Session
 from integrations import address_lookup
 from interfaces import a2a_server
-from tests.test_fixes import fresh, labels, values
+from tests.test_fixes import fresh, has_cancel, labels, values
 from tests.test_pending import CodeOnly, kind
 
 RESULTS: dict[str, bool] = {}
@@ -190,6 +190,46 @@ def run():
     code, _, body = a2a_server.route("POST", "/api/tickets/upload",
                                      {"Content-Type": "application/pdf"}, b"%PDF")
     check("T-55r", "upload returns a storage id", code == 200 and json.loads(body)["storageId"])
+
+    print("\nF-60  A request already pending for the same check")
+    svc, conv = fresh(CodeOnly())
+    conv.send("Stop payment on Jane Miller's check 1043"); conv.send(CB)
+    r = conv.send("confirm"); first = r.data["ticket_id"]
+    r = conv.send("Stop payment on Jane Miller's check 1043")
+    check("T-60a", "second stop payment: 'already pending (SR-...)', Send another / Cancel",
+          r.card["title"] == "Already requested"
+          and f"already pending ({first})" in r.card["message"]
+          and labels(r) == ["Send another"] and has_cancel(r))
+    r = conv.send("cancel")
+    check("T-60a", "typing 'cancel' on the card cancels (like the button)",
+          r.message.startswith("Cancelled"))
+    r = conv.send("Stop payment on Jane Miller's check 1043")
+    r = conv.send("Send another")
+    check("T-60a", "Send another: the review card as usual", r.status == "awaiting_confirmation")
+    r = conv.send("confirm")
+    check("T-60a", "and a new ticket", r.status == "ok" and r.data["ticket_id"] != first)
+    r = conv.send("Did Jane Miller's check 1043 clear?")
+    check("T-60b", "look-up card: 'Stop payment pending (SR-...)', no Stop button",
+          "Stop payment pending (SR-" in r.card["message"]
+          and "Stop this payment" not in labels(r))
+    conv.send("__no__")
+    conv.send("Stop payment on Jane Miller's check 1041"); conv.send("Request a copy")
+    r = conv.send("confirm"); copy_id = r.data["ticket_id"]
+    r = conv.send("Jane Miller needs a copy of check 1041")
+    check("T-60c", "Check Copy: 'A copy of check 1041 was already requested (SR-...)'",
+          f"already requested ({copy_id})" in r.card["message"])
+    r = conv.send("cancel")
+    check("T-60c", "Cancel: nothing sent",
+          len([t for t in svc.tickets.list_for_advisor("ADV-1234") if t["tool"] == "check_copy"]) == 1)
+    svc, conv = fresh(CodeOnly())
+    svc.tickets.submit({"draft_id": "other", "advisor_id": "ADV-5678", "tool": "stop_payment",
+                        "account_id": "ACC-8821", "check_numbers": ["1044"], "ticket": "Stop Payment"})
+    r = conv.send("Stop payment on Jane Miller's check 1044")
+    if kind(r) == "callback_form":
+        r = conv.send(CB)
+    check("T-60d", "another advisor's pending request: said, without their SR #",
+          "already pending (by another advisor)" in r.card["message"]
+          and "SR-" not in r.card["message"])
 
     print("\nF-59  Active Tickets: View an attachment")
     a2a_server.reset_memory()
