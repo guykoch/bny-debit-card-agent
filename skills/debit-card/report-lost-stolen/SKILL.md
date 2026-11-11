@@ -1,10 +1,10 @@
 ---
 name: report-lost-stolen
+description: Block a card and flag the account after it is lost or stolen.
 tool: report_lost_stolen
 lookups: find_client, list_cards
-priority: 90
 triggers: lost, stolen, wallet, theft, stole, missing card, pickpocket
-description: Block a card and flag the account after it is lost or stolen.
+priority: 90
 ---
 
 # Report lost or stolen

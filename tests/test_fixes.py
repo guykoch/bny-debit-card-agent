@@ -317,7 +317,7 @@ def run():
     _, conv = fresh(m)
     r = conv.send("do the card thing for jane")
     check("T-14a", "the actions offered as buttons, in two groups",
-          len(labels(r)) == 9 and set(r.card.get("groups", {})) == {"now", "ticket"})
+          len(labels(r)) == 10 and set(r.card.get("groups", {})) == {"now", "ticket"})
     m.add(call("find_client", query="Jane Miller"), call("list_cards", client_id="C-88210"),
           say("Where is Jane travelling, and when?"))
     r = conv.send("Add a travel notice")
@@ -410,7 +410,7 @@ def run():
     _, conv = fresh(m)
     conv.send("lo Sarah Chen's card")
     r = conv.send("No, something else")
-    check("T-27b", "No: the actions as buttons", len(labels(r)) == 9
+    check("T-27b", "No: the actions as buttons", len(labels(r)) == 10
           and r.card["title"] == "Actions")
     m = ScriptedModel(route("lock-card"), call("find_client", query="Sarah Chen"))
     _, conv = fresh(m)

@@ -9,6 +9,8 @@ Four CSV files. Open them in Excel, edit, save — no code change needed.
 | `addresses.csv` | every address in each client's profile: label, address, state, country. A replacement card may only go to one of these, and only in a US state or territory |
 | `entitlements.csv` | which advisor may perform which actions on which client |
 | `accounts.csv` | each client's accounts: account_id, client_id, type (AMA, Resource Checking), last four. Tickets pick one of these |
+| `advisors.csv` | the advisor directory: name and default Call Back # (US or Non-US, with ext). In production this comes from the NetX360 sign-in profile |
+| `incoming_checks.csv` | rollover checks received at the money desks (Jersey City, Pittsburgh, Lake Mary): amount, check #, sender, payee line, the account written on it, and whether it was credited or is unidentified |
 | `checks.csv` | checks written on those accounts: number, amount, date written, payee, status (outstanding / posted / stopped), date paid. Read-only: used to fill in and check Stop Payment and Check Copy tickets and to answer "did check 1043 clear?" |
 
 ## entitlements.csv

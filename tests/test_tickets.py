@@ -43,14 +43,20 @@ def key(r, label):
 def run():
     settings.ADDRESS_PROVIDER = "sample"
 
-    print("\nF-55  Stop Payment ticket")
+    print("\nF-55 / F-61  Stop a check (BNY form: Stop Payment)")
     svc, conv = fresh(CodeOnly())
     r = conv.send("Stop payment on Jane Miller's check 1043")
-    check("T-55a", "one sentence: only the Call Back # is asked (first time)",
-          kind(r) == "callback_form")
-    r = conv.send(CB)
-    check("T-55a", "review card: Stop Payment, check 1043 $250.00 filled from the record",
-          r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Stop Payment"
+    check("T-61b", "one sentence: straight to the review card, Call Back # from the advisor directory",
+          r.status == "awaiting_confirmation"
+          and r.card["ticket"]["editable"]["callback"] == {"kind": "US", "number": "212-555-0142",
+                                                           "ext": "204"})
+    check("T-61a", "'stop payment' understood; the card says 'Stop a check', the form 'Stop Payment'",
+          r.card["ticket"]["title"] == "Stop a check" and "Stop Payment" in r.card["ticket"]["form"]
+          and r.card["ticket"]["editable"]["subject"] == "Stop Payment: check 1043")
+    check("T-61b", "the advisor's name is on the form (Name: Alex Morgan)",
+          {"label": "Name", "value": "Alex Morgan"} in r.card["ticket"]["all"])
+    check("T-55a", "review card: check 1043 $250.00 filled from the record",
+          r.status == "awaiting_confirmation"
           and "1043" in json.dumps(r.card["ticket"]) and "$250.00" in json.dumps(r.card["ticket"]))
     check("T-55a", "review card: Send, Edit details, Cancel",
           [a["label"] for a in r.card["actions"]] == ["Send", "Edit details", "Cancel"])
@@ -61,12 +67,21 @@ def run():
           and "processed by the Service Center" in r.message)
     t = svc.tickets.list_for_advisor("ADV-1234")
     check("T-55a", "the ticket is listed for the advisor (Active Tickets)",
-          len(t) == 1 and t[0]["ticket"] == "Stop Payment" and t[0]["client_name"] == "Jane Miller")
+          len(t) == 1 and t[0]["ticket"] == "Stop a check" and t[0]["client_name"] == "Jane Miller")
     check("T-55a", "audited as 'Ticket: Stop Payment'",
           audit.LOG[-1]["action_name"] == "Ticket: Stop Payment")
-    r = conv.send("Stop payment on Robert Castellano's check 3102")
-    check("T-55b", "Call Back # saved: the next ticket goes straight to review",
-          r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Stop Payment")
+    conv.send("Stop payment on Robert Castellano's check 3102")
+    r = conv.send("confirm_with:" + json.dumps({"callback": {"kind": "US", "number": "212-555-0142",
+                                                             "ext": "310"}}))
+    r = conv.send("Stop payment on Robert Castellano's check 3101")
+    r = conv.send("Stop payment on Jane Miller's check 1044")
+    check("T-61b", "a changed Call Back # is saved and used next time",
+          r.card["ticket"]["editable"]["callback"]["ext"] == "310")
+    svc2, conv2 = fresh(CodeOnly(), "ADV-5678")
+    r = conv2.send("Stop payment on Claire Beaumont's check 1")
+    svc2.advisors.get("ADV-5678")
+    check("T-61b", "each advisor has their own number",
+          svc2.advisors.get("ADV-5678")["callback"]["number"] == "312-555-0177")
 
     svc, conv = fresh(CodeOnly())
     r = conv.send("Stop payment on Jane Miller's check 1041")
@@ -74,7 +89,7 @@ def run():
           "was paid on 10/18/2026" in r.card["message"] and "Request a copy" in labels(r))
     r = conv.send("Request a copy")
     check("T-55c", "one tap starts the Check Copy ticket with the check filled in",
-          conv.task["skill"].name == "check-copy" and kind(r) == "callback_form")
+          conv.task["skill"].name == "check-copy" and r.status == "awaiting_confirmation")
 
     svc, conv = fresh(CodeOnly())
     r = conv.send("Stop payment on Jane Miller's check 1045")
@@ -88,8 +103,6 @@ def run():
           all("Not paid yet" in l for l in labels(r)[:-1])
           and not any("1042" in l or "1041" in l for l in labels(r)))
     r = conv.send(values(r)[0])
-    if kind(r) == "callback_form":
-        r = conv.send(CB)
     check("T-55d", "picking 1044: the review card and the subject follow the fix",
           "1044" in json.dumps(r.card["ticket"]["key"])
           and r.card["ticket"]["editable"]["subject"].endswith("1044"))
@@ -98,7 +111,7 @@ def run():
     svc, conv = fresh(CodeOnly())
     r = conv.send("Jane Miller needs a copy of check 1043")
     check("T-55e", "copy of an unpaid check: offers to stop it instead",
-          "Stop this payment" in labels(r))
+          "Stop this check" in labels(r))
     svc, conv = fresh(CodeOnly())
     r = conv.send("Jane Miller needs a copy of check 1040")
     r = conv.send(values(r)[0])
@@ -108,9 +121,10 @@ def run():
           and not any("1043" in l or "1044" in l for l in labels(r)))
     svc, conv = fresh(CodeOnly())
     r = conv.send("Did Jane Miller's check 1043 clear?")
-    check("T-55f", "look-up: amount, date in US format, status, and next steps as buttons",
-          kind(r) == "check_status" and "10/28/2026" in json.dumps(r.card)
-          and labels(r)[:1] == ["Stop this payment"])
+    check("T-61c", "look-up: the answer first ('Check 1043: Not paid yet'), one detail line",
+          kind(r) == "check_status" and r.card["title"] == "Check 1043: Not paid yet"
+          and r.card["message"] == "$250.00 to City Plumbing Co, written 10/28/2026 · AMA ...8821")
+    check("T-61c", "not paid yet: a Stop this check button", labels(r)[:1] == ["Stop this check"])
     check("T-55f", "a look-up changes nothing and saves no ticket",
           svc.tickets.list_for_advisor("ADV-1234") == [])
 
@@ -118,8 +132,7 @@ def run():
     svc, conv = fresh(CodeOnly())
     hit = address_lookup.suggest("1100 Congress")["suggestions"][0]["id"]
     conv.send("Jane Miller moved, change her address")
-    conv.send("ticket_address:" + json.dumps({"pick": hit, "unit": "", "phone": ""}))
-    r = conv.send(CB)
+    r = conv.send("ticket_address:" + json.dumps({"pick": hit, "unit": "", "phone": ""}))
     check("T-55g", "review card: no red 'phone or address required' note (already met)",
           not r.card["ticket"]["note"])
     conv.send("confirm")
@@ -193,7 +206,7 @@ def run():
 
     print("\nF-60  A request already pending for the same check")
     svc, conv = fresh(CodeOnly())
-    conv.send("Stop payment on Jane Miller's check 1043"); conv.send(CB)
+    conv.send("Stop payment on Jane Miller's check 1043")
     r = conv.send("confirm"); first = r.data["ticket_id"]
     r = conv.send("Stop payment on Jane Miller's check 1043")
     check("T-60a", "second stop payment: 'already pending (SR-...)', Send another / Cancel",
@@ -210,8 +223,8 @@ def run():
     check("T-60a", "and a new ticket", r.status == "ok" and r.data["ticket_id"] != first)
     r = conv.send("Did Jane Miller's check 1043 clear?")
     check("T-60b", "look-up card: 'Stop payment pending (SR-...)', no Stop button",
-          "Stop payment pending (SR-" in r.card["message"]
-          and "Stop this payment" not in labels(r))
+          "Stop payment pending (SR-" in r.card["title"]
+          and "Stop this check" not in labels(r))
     conv.send("__no__")
     conv.send("Stop payment on Jane Miller's check 1041"); conv.send("Request a copy")
     r = conv.send("confirm"); copy_id = r.data["ticket_id"]
@@ -230,6 +243,116 @@ def run():
     check("T-60d", "another advisor's pending request: said, without their SR #",
           "already pending (by another advisor)" in r.card["message"]
           and "SR-" not in r.card["message"])
+
+    print("\nF-61  Linked requests: context across messages (Ben, 11/11)")
+    svc, conv = fresh(CodeOnly())
+    conv.send("Did Jane Miller's check 1043 clear?")
+    r = conv.send("ok, stop that payment then")
+    check("T-61d", "'stop that payment' after a look-up: confirm the check with one tap",
+          r.card["message"] == "Stop check 1043 for Jane Miller ($250.00)?"
+          and labels(r) == ["Yes", "Another check"] and has_cancel(r))
+    r = conv.send("Yes")
+    check("T-61d", "Yes: the review card for check 1043 (nothing sent yet)",
+          r.status == "awaiting_confirmation" and "1043" in json.dumps(r.card["ticket"]["key"])
+          and svc.tickets.list_for_advisor("ADV-1234") == [])
+    svc, conv = fresh(CodeOnly())
+    conv.send("Was Jane Miller's check 1041 cashed?")
+    r = conv.send("great, can we get a copy of it")
+    check("T-61d", "'a copy of it' after a paid check: Request a copy of check 1041?",
+          r.card["message"].startswith("Request a copy of check 1041 for Jane Miller"))
+    r = conv.send("Another check")
+    check("T-61d", "Another check: same client, the check details asked",
+          kind(r) == "check_form" and conv.task["picked"]["client_id"] == "C-88210")
+    svc, conv = fresh(CodeOnly())
+    conv.send("Did Jane Miller's check 1043 clear?")
+    conv.send("Lock Jane Miller's card"); conv.send("confirm")
+    r = conv.send("stop it")
+    check("T-61e", "after a card action, 'stop it' no longer means the check",
+          not (r.card or {}).get("message", "").startswith("Stop check 1043"))
+    svc, conv = fresh(CodeOnly())
+    conv.send("Robert Castellano's wallet got stolen at the airport this morning")
+    conv.send("CARD-2201"); conv.send("Yes"); conv.send("confirm")
+    r = conv.send("Yes, order a replacement")
+    check("T-61f", "'Yes, order a replacement' keeps the client and card: no 'Which client?'",
+          r.card["title"] == "Delivery address" and conv.task["picked"]["card_id"] == "CARD-2201")
+    r = conv.send(values(r)[0])
+    check("T-61f", "reason Stolen and the flag carried over from the report",
+          r.status == "awaiting_confirmation" and r.data["input"]["reason"] == "stolen"
+          and r.data["input"]["flag_transactions"] is True)
+
+    print("\nF-62  Rollover check inquiry (Retail Check Deposit Status Inquiry)")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Has Jane Miller's rollover check from Voya come in yet? It's for $85,000.")
+    check("T-62a", "received and credited: says so, no ticket needed",
+          "received in Jersey City on 11/09/2026 and credited to AMA ...8821" in r.message
+          and "No inquiry is needed" in r.message and svc.tickets.list_for_advisor("ADV-1234") == [])
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Robert Castellano's 401(k) rollover from Fidelity, check 77810 for $142,300, "
+                  "went out to Pittsburgh last week. Can you check on it?")
+    check("T-62b", "received but not credited: the form card, filled from the received check",
+          kind(r) == "rollover_form" and "couldn't be credited" in r.card["info"]
+          and r.card["values"]["destination"] == "Pittsburgh"
+          and r.card["values"]["lockbox"] == "Rollover Lockbox-382084"
+          and r.card["values"]["amount"] == "142300.00")
+    check("T-62b", "missing required fields highlighted",
+          r.card["missing"] == ["Method of Delivery", "Date Sent"])
+    form = {**r.card["values"], "delivery_method": "Overnight", "date_sent": "2026-11-04"}
+    r = conv.send("rollover_form:" + json.dumps(form))
+    check("T-62c", "Overnight without a tracking # is refused on the card",
+          kind(r) == "rollover_form" and "Tracking #" in r.message)
+    form["delivery_method"] = "Regular mail"
+    r = conv.send("rollover_form:" + json.dumps(form))
+    check("T-62b", "then the review card (Account, Check, Sent, Destination, Call Back #)",
+          r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Check Deposit Status Inquiry"
+          and "Retail Check Deposit Status Inq" in r.card["ticket"]["form"]
+          and key(r, "Destination") == "Pittsburgh · Rollover Lockbox-382084")
+    r = conv.send("confirm")
+    t = svc.tickets.list_for_advisor("ADV-1234")[0]
+    check("T-62b", "Send: ticket saved with every form field",
+          r.status == "ok" and t["request_type"] == "Retail Check Deposit Status Inq"
+          and {"label": "Amount", "value": "$142,300.00"} in t["fields"]
+          and {"label": "Date Sent", "value": "11/04/2026"} in t["fields"])
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Retail check deposit status inquiry for Priya Raghunathan: check 55120, "
+                  "$300,000.00 from ADP, sent overnight 11/10/2026, tracking 7712 3345 9901, "
+                  "to Lake Mary.")
+    check("T-62d", "not received yet: everything filled from one sentence, nothing missing",
+          kind(r) == "rollover_form" and "No check matching this has been received" in r.card["info"]
+          and r.card["missing"] == [] and r.card["values"]["tracking_number"] == "771233459901"
+          and r.card["values"]["date_sent"] == "2026-11-10")
+    adv = Session(advisor_id="ADV-1234")
+    bad = {"client_id": "C-10344", "account_id": "ACC-1034", "draft_id": "rf", "amount": "100",
+           "check_number": "1", "delivery_method": "Regular mail", "date_sent": "2099-01-01",
+           "destination": "Lake Mary", "callback": {"kind": "US", "number": "212-555-0142"}}
+    r = dispatch(svc, adv, "rollover_inquiry", bad)
+    check("T-62e", "a future Date Sent is refused", r.data.get("code") == "rollover_missing")
+    r = dispatch(svc, adv, "rollover_inquiry", {**bad, "date_sent": "2026-11-01",
+                                                "lockbox": "Rollover Lockbox-382084"})
+    check("T-62e", "a lockbox from another desk is refused", r.data.get("code") == "rollover_missing")
+
+    print("\nF-63  Misc boundary; office requests with no client")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Send a request to the service team: office 4521 needs 20 account-opening kits.")
+    check("T-63a", "office request: no client asked, Office # 4521 on the review card",
+          r.status == "awaiting_confirmation" and key(r, "Account") == "Office # 4521"
+          and key(r, "Client") == "Office request (no client)")
+    r = conv.send("confirm")
+    check("T-63a", "and sent", r.status == "ok")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Order a new checkbook for Jane Miller's Resource Checking account, starting at check 2101.")
+    check("T-63b", "the account named in the message is used (no 'Which account?')",
+          r.status == "awaiting_confirmation" and key(r, "Account") == "Resource Checking ...8830")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Jane Miller got hit with a $35 overdraft fee, can we ask them to waive it?")
+    check("T-63c", "a fee refund is a Misc request", conv.task and conv.task["skill"].name == "misc-request")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Elena Vasquez can't find her October statement, can they send it again?")
+    check("T-63c", "re-sending a statement is a Misc request (no longer out of scope)",
+          conv.task and conv.task["skill"].name == "misc-request")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Can you order a new couch for our office lobby?")
+    check("T-63d", "not about the account: out of scope, nothing created",
+          "I can help with" in r.message and conv.task is None)
 
     print("\nF-59  Active Tickets: View an attachment")
     a2a_server.reset_memory()

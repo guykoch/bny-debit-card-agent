@@ -38,6 +38,7 @@ ACTION_NAMES = {
     "report_lost_stolen": "Report lost or stolen", "travel_notice": "Add travel notice",
     "stop_payment": "Ticket: Stop Payment", "check_copy": "Ticket: Check Copy",
     "address_update": "Ticket: Address Update", "misc_request": "Ticket: Misc request",
+    "rollover_inquiry": "Ticket: Check Deposit Status Inquiry",
 }
 
 

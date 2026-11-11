@@ -1,0 +1,84 @@
+{
+  "name": "rollover_inquiry",
+  "access": "write",
+  "ticket": true,
+  "description": "Send a Retail Check Deposit Status Inquiry (rollover check) to the Service Center, so the money desk can match and credit the check. Nothing else changes.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "client_id": {
+        "type": "string",
+        "description": "Client identifier returned by find_client."
+      },
+      "account_id": {
+        "type": "string",
+        "description": "Account identifier returned by list_accounts."
+      },
+      "draft_id": {
+        "type": "string",
+        "description": "Set by the system; one per review card (no duplicate tickets)."
+      },
+      "additional_info": {
+        "type": "string",
+        "description": "Additional Information (the advisor's own words)."
+      },
+      "callback": {
+        "type": "object",
+        "description": "Call Back #: {kind: US | Non-US, number, ext}."
+      },
+      "attachments": {
+        "type": "array",
+        "description": "Optional files: {storage_id, name, size, type}."
+      },
+      "amount": {
+        "type": "string",
+        "description": "Check amount, e.g. 142300.00."
+      },
+      "check_number": {
+        "type": "string",
+        "description": "Check number as written on the check."
+      },
+      "delivery_method": {
+        "type": "string",
+        "enum": [
+          "Regular mail",
+          "Overnight"
+        ]
+      },
+      "tracking_number": {
+        "type": "string",
+        "description": "Required for Overnight."
+      },
+      "date_sent": {
+        "type": "string",
+        "description": "YYYY-MM-DD, not in the future."
+      },
+      "sent_from": {
+        "type": "string",
+        "description": "The company that sent the check, e.g. ADP, Voya."
+      },
+      "destination": {
+        "type": "string",
+        "enum": [
+          "Jersey City",
+          "Pittsburgh",
+          "Lake Mary"
+        ]
+      },
+      "lockbox": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "client_id",
+      "account_id",
+      "amount",
+      "check_number",
+      "delivery_method",
+      "date_sent",
+      "destination",
+      "callback",
+      "draft_id"
+    ]
+  }
+}

@@ -18,6 +18,7 @@ from typing import Optional
 from config import settings
 from core.models import Account, Address, Card, Check, Client
 from integrations.mock import dataset as data
+from integrations.mock import dataset
 
 
 class MemoryAddressBook:
@@ -95,6 +96,9 @@ class MockClientDirectory:
 
 
 class MockEntitlementService:
+    def known_advisor(self, advisor_id: str) -> bool:
+        return advisor_id in data.GRANTS
+
     def can(self, advisor_id: str, client_id: str, action: str) -> bool:
         granted = data.GRANTS.get(advisor_id, {}).get(client_id)
         if granted is None:
@@ -211,6 +215,45 @@ class MemoryServiceCenter:
                 if t.get("tool") == tool and t.get("account_id") == account_id
                 and str(check_number) in (t.get("check_numbers") or [])
                 and t.get("status") == "Submitted"]
+
+
+class MockIncomingChecks:
+    """
+    Checks received at the money desks (incoming_checks.csv), for the rollover inquiry.
+    'credited' = the check carried enough to credit the account; 'unidentified' = it
+    didn't, and the desk is holding it.
+    """
+
+    def find(self, client_name: str, amount: str = "", check_number: str = "",
+             sent_from: str = "") -> Optional[dict]:
+        last = (client_name or "").split()[-1].lower() if client_name else ""
+        best = None
+        for row in dataset.INCOMING_CHECKS:
+            if amount and abs(float(row["amount"]) - float(amount)) > 0.005:
+                continue
+            if check_number and row["check_number"] != str(check_number):
+                continue
+            if sent_from and sent_from.lower() not in row["sent_from"].lower():
+                continue
+            if not (amount or check_number):
+                continue                          # never match on the sender alone
+            if last and last not in row["payee_line"].lower():
+                continue
+            best = dict(row)
+            break
+        return best
+
+
+class MockAdvisorDirectory:
+    """Who the advisor is: name and default Call Back # (advisors.csv). Read-only."""
+
+    def get(self, advisor_id: str) -> dict:
+        row = dataset.ADVISORS.get(advisor_id)
+        if not row:
+            return {}
+        cb = {"kind": row.get("callback_kind") or "US", "number": row.get("callback_number", ""),
+              "ext": row.get("callback_ext", "")}
+        return {"name": row.get("name", ""), "callback": cb if cb["number"] else None}
 
 
 class MemoryAdvisorSettings:

@@ -8,7 +8,7 @@
     "properties": {
       "client_id": {
         "type": "string",
-        "description": "Client identifier returned by find_client."
+        "description": "Client identifier returned by find_client. Leave out for an office request (IBD / Office / IP # instead)."
       },
       "account_id": {
         "type": "string",
@@ -48,7 +48,6 @@
       }
     },
     "required": [
-      "client_id",
       "subject",
       "additional_info",
       "callback",

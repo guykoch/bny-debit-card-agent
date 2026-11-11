@@ -82,7 +82,8 @@ PENDING_CARD_ACTIONS = {"lock_card", "replace_card"}
 # actions of one kind per advisor in the time window. Agree real numbers with BNY.
 VOLUME_LIMITS = {"replace_card": 5, "report_lost_stolen": 5,
                  # Service Center tickets (per advisor, per window)
-                 "stop_payment": 10, "check_copy": 10, "address_update": 5, "misc_request": 10}
+                 "stop_payment": 10, "check_copy": 10, "address_update": 5, "misc_request": 10,
+                 "rollover_inquiry": 10}
 VOLUME_WINDOW_MINUTES = 10
 
 
@@ -150,13 +151,16 @@ class Services:
     tickets: object = None           # Service Center tickets
     advisor_settings: object = None  # e.g. the saved Call Back #
     files: object = None             # ticket attachments
+    advisors: object = None          # advisor directory: name, default Call Back #
+    incoming_checks: object = None   # checks received at the money desks (rollover inquiry)
 
 
 def build_services() -> Services:
     if MODE == "mock":
         from integrations.mock.services import (
-            MemoryAdvisorSettings, MemoryFileStore, MemoryServiceCenter, MockCardSystem,
-            MockCheckSystem, MockClientDirectory, MockEntitlementService)
+            MemoryAdvisorSettings, MemoryFileStore, MemoryServiceCenter, MockAdvisorDirectory,
+            MockCardSystem, MockCheckSystem, MockClientDirectory, MockEntitlementService,
+            MockIncomingChecks)
         ent = MockEntitlementService()
         book = None
         if active_store() == "convex":
@@ -173,7 +177,8 @@ def build_services() -> Services:
             tickets, prefs, files = MemoryServiceCenter(), MemoryAdvisorSettings(), MemoryFileStore()
         return Services(clients=MockClientDirectory(ent, book), entitlements=ent, cards=cards,
                         checks=MockCheckSystem(), tickets=tickets, advisor_settings=prefs,
-                        files=files)
+                        files=files, advisors=MockAdvisorDirectory(),
+                        incoming_checks=MockIncomingChecks())
 
     if MODE == "bny":
         from integrations.bny.services import (

@@ -47,9 +47,8 @@ def run():
     r = conv.send("Jane Miller moved, update her address")
     check("T-28a", "the ticket's address card (search, apartment line, phone)",
           r.card["kind"] == "ticket_address" and r.card["title"] == "New address")
-    conv.send("ticket_address:" + json.dumps({"pick": pick_id("1 Bryant Park"), "unit": "Apt 12C",
-                                               "phone": ""}))
-    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
+    r = conv.send("ticket_address:" + json.dumps({"pick": pick_id("1 Bryant Park"),
+                                                   "unit": "Apt 12C", "phone": ""}))
     check("T-28a", "review card: Address Update, the new address with the unit",
           r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Address Update"
           and "Apt 12C" in json.dumps(r.card["ticket"]))

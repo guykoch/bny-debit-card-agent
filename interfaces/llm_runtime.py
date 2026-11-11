@@ -61,7 +61,7 @@ from interfaces.local_runtime import (CHANGE_DATES, NO, PIN_REPLY, YES, Conversa
 
 OUT_OF_SCOPE = ("I can help with your clients' debit cards (lock, unlock, replace, report "
                 "lost or stolen, travel notices) and send Service Center tickets (stop a "
-                "payment, a check copy, an address change, other checking requests). For "
+                "check, a check copy, an address change, other checking requests). For "
                 "anything else, please use the usual NetX360 screens.")
 
 # P-close: a debit card is never closed on its own (replacing it closes the old card).
@@ -140,11 +140,13 @@ ACTION_LABELS = {"lock-card": "Lock the card", "unlock-card": "Unlock the card",
                  "report-lost-stolen": "Report it lost or stolen",
                  "travel-notice": "Add a travel notice",
                  # Service Center tickets
-                 "stop-payment": "Stop a payment", "check-copy": "Request a check copy",
+                 "stop-payment": "Stop a check", "check-copy": "Request a check copy",
                  "address-update": "Change an address", "misc-request": "Other request (Misc)",
+                 "rollover-inquiry": "Rollover check inquiry",
                  "check-status": "Look up a check"}
 NOW_ACTIONS = ["lock-card", "unlock-card", "replace-card", "report-lost-stolen", "travel-notice"]
-TICKET_ACTIONS = ["stop-payment", "check-copy", "address-update", "misc-request"]
+TICKET_ACTIONS = ["stop-payment", "check-copy", "address-update", "rollover-inquiry",
+                  "misc-request"]
 TICKET_NOTE = "Sends a request to the Service Center. Nothing changes until it is processed."
 
 
@@ -254,6 +256,7 @@ class GptConversation:
         self.done: list[dict] = []           # what actually ran in this conversation (P-08)
         self.last_client: str | None = None  # the client of the latest request (P2-02)
         self.last_check: dict | None = None  # the check looked up last (stop / copy it next)
+        self.last_topic: str | None = None   # "check" or "card": what "it" refers to now
         # Every id a lookup has returned in this conversation. An action may only use
         # these - the "never invent an ID" rule, enforced in code.
         self.seen: set[str] = {session.client_id} if session.client_id else set()
@@ -271,7 +274,7 @@ class GptConversation:
                 "history": self.history[-80:], "task": task, "pending": self.pending,
                 "seen": sorted(self.seen), "skill": self.skill.name if self.skill else None,
                 "done": self.done[-20:], "last_client": self.last_client,
-                "last_check": self.last_check}
+                "last_check": self.last_check, "last_topic": self.last_topic}
 
     def restore(self, state: dict) -> None:
         self.history = list(state.get("history") or [])
@@ -280,6 +283,7 @@ class GptConversation:
         self.done = list(state.get("done") or [])
         self.last_client = state.get("last_client")
         self.last_check = state.get("last_check")
+        self.last_topic = state.get("last_topic")
         if self.session.client_id:
             self.seen.add(self.session.client_id)
         self.skill = skills.get(state["skill"]) if state.get("skill") else None
@@ -321,6 +325,8 @@ class GptConversation:
     def _new_task(self, skill) -> None:
         self.task = {"skill": skill, "texts": [], "picked": {}}
         self.skill = skill
+        if skill is not None and skill.kind not in ("ticket", "lookup"):
+            self.last_topic = "card"                     # "it" now means the card
 
     def _stop(self, message: str, code: str = "refused") -> ToolResponse:
         """A refusal from code: shown as is, and the request ends."""
@@ -675,6 +681,9 @@ class GptConversation:
             found = self._client_from_words()
             if isinstance(found, ToolResponse):
                 return found
+            if found is None and skill.name == "misc-request" and any(
+                    (self.task.get("draft") or {}).get(k) for k in ("ibd", "office", "ip")):
+                return self._ticket_step()                   # an office request: no client
             if found is None:
                 return self._ask_client()
             stop = self._set_client(found)
@@ -874,6 +883,8 @@ class GptConversation:
             self.pending, self.task = None, None
             self.history.append({"role": "user", "content": "Actions"})
             return self._say(self._action_menu("What do you need?"))
+        if low.startswith("__followup__:"):                  # an offer after an action
+            return self._say(self._follow_up(text[len("__followup__:"):]))
         if low.startswith("__ticket__:"):                    # from a looked-up check's card
             self.pending = None
             return self._say(self._ticket_from_check(text[len("__ticket__:"):]))
@@ -915,7 +926,7 @@ class GptConversation:
                 if result.status == "error" and result.data.get("code") in (
                         "reason_required", "dates_invalid", "destination_invalid",
                         "callback_missing", "attachment_invalid", "subject_missing",
-                        "checks_missing", "address_missing"):
+                        "checks_missing", "address_missing", "rollover_missing"):
                     self.pending = {**p, "input": new_input}
                     return self._reshow(result.message)      # the card stays open
                 self.pending = None
@@ -924,6 +935,15 @@ class GptConversation:
                 self._note(f"the advisor clicked Confirm; result: {result.message}")
                 self.task = None
                 if result.card and result.card.get("follow_up_actions"):
+                    if p["tool"] == "report_lost_stolen" and result.status == "ok":
+                        # Ben (11/11): the offer keeps the client and card it was made for.
+                        ti = new_input or p["input"]
+                        go = (f"__followup__:replace-card|{ti.get('client_id', '')}|"
+                              f"{ti.get('card_id', '')}|{ti.get('incident_type', 'lost')}|"
+                              f"{'1' if ti.get('flag_transactions') else '0'}")
+                        result.card["follow_up_actions"] = [
+                            {**a, "value": go} if a["value"] != "__no__" else a
+                            for a in result.card["follow_up_actions"]]
                     self.pending = {"kind": "options", "panel": {
                         "kind": "choice", "actions": result.card["follow_up_actions"]}}
                 return self._say(result)
@@ -1006,6 +1026,8 @@ class GptConversation:
                 return self._say(ToolResponse(status="ok", message="OK. Nothing else was changed."))
             if picked is not None and str(picked).startswith("__ticket__:"):
                 return self._say(self._ticket_from_check(picked[len("__ticket__:"):]))
+            if picked is not None and str(picked).startswith("__followup__:"):
+                return self._say(self._follow_up(picked[len("__followup__:"):]))
             if picked is not None:
                 text = picked
 
@@ -1025,12 +1047,16 @@ class GptConversation:
                 "action:" + text[:300], "Close the card?", CLOSE_REPLY,
                 [{"label": "Replace the card", "value": "replace-card"},
                  {"label": "Lock the card", "value": "lock-card"}]))
+        ref = self._check_reference(text)                     # "ok, stop that payment then"
+        if ref is not None:
+            return self._say(ref)
         if _CANCEL_ONLY.search(text) and not _CARD_WORD.search(text) \
-                and not _CHECK_WORDS.search(text):            # "cancel it for Jane": which?
+                and not _CHECK_WORDS.search(text) \
+                and not re.search(r"\b\d{3,10}\b", text):     # "cancel it for Jane": which?
             return self._say(self._ask(
                 "action:" + text[:300], "A check or the card?",
                 "Do you mean a check or the debit card?",
-                [{"label": "Stop a check payment", "value": "stop-payment"},
+                [{"label": "Stop a check", "value": "stop-payment"},
                  {"label": "Lock the debit card", "value": "lock-card"},
                  {"label": "Replace the debit card", "value": "replace-card"}]))
         try:
@@ -1245,6 +1271,29 @@ class GptConversation:
         self.pending = None
         return None
 
+    def _follow_up(self, spec: str) -> ToolResponse:
+        """
+        "Yes, order a replacement" after a lost / stolen report: the same client and
+        card, the reason taken from the report. Still checked and confirmed as usual.
+        """
+        name, cid, card_id, why, flagged = (spec.split("|") + ["", "", "", "", ""])[:5]
+        skill = skills.get(name)
+        card = self.services.cards.get_card(card_id) if card_id else None
+        self.pending = None
+        if skill is None or card is None or card.client_id != cid:
+            self.task = None
+            return ToolResponse(status="needs_input", message="What would you like to do?")
+        self.history.append({"role": "user", "content": "Yes, order a replacement"})
+        self._new_task(skill)
+        self.task["texts"].append(f"Order a replacement card, the card was {why}.")
+        stop = self._set_client(cid)
+        if stop:
+            return stop
+        self.task["picked"]["card_id"] = card_id
+        self.task["picked"]["flag_transactions"] = flagged == "1"   # answered in the report
+        self._note(f"the advisor accepted the offer: replace card ...{card.card_last4} ({why}).")
+        return self._advance()
+
     def _start_address_ticket(self) -> ToolResponse:
         """
         Replacement flow -> "A different address". A replacement can only go to an
@@ -1283,14 +1332,20 @@ class GptConversation:
         d, tool = self.task["draft"], self._ticket_tool()
         text = " ".join(self.task["texts"])
         nums, amts = T.check_numbers(text), T.amounts(text)
+        if tool in ("stop_payment", "check_copy") and not nums:
+            # "put a stop on 1043": a bare number is the check (amounts and dates removed first)
+            bare = re.sub(r"\$\s?[\d,]+(?:\.\d+)?|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b|"
+                          r"\b\d[\d,]*(?:\.\d+)?\s*(?:dollars|usd)\b", " ", text, flags=re.I)
+            nums = re.findall(r"(?<![\d.,])\b(\d{3,8})\b(?![\d.,])", bare)[:10]
         if tool in ("stop_payment", "check_copy"):
             dw = T.date_written_in(text) if len(nums) <= 1 else None
             d["checks"] = [{"check_number": n, "amount": amts[i] if i < len(amts) else "",
                             "date_written": dw or ""} for i, n in enumerate(nums)]
             d["additional_info"] = T.redact(text)
             if nums:
-                d["subject"] = f"{T.template(tool)['title']}: check {', '.join(nums)}"
-            if not nums and re.search(r"\b(it|that check|the check|this check|that one)\b",
+                d["subject"] = f"{T.subject_prefix(tool)}: check {', '.join(nums)}"
+            if not nums and re.search(r"\b(it|that check|the check|this check|that one|this one|"
+                                      r"that payment|this payment|the payment|same check)\b",
                                       text, re.I):
                 d["_use_last_check"] = True
         elif tool == "address_update":
@@ -1304,24 +1359,45 @@ class GptConversation:
             details = T.redact(text).strip()
             d["additional_info"] = details
             d["subject"] = self._draft_subject(details)
+            for kind_, num in re.findall(r"\b(ibd|office|ip)\s*(?:#|number|no\.?)?\s*(\d[\w-]{1,11})\b",
+                                         text, re.I):        # "office 4521": an office request
+                d[kind_.lower()] = num
         elif tool == "find_check" and nums:
             d["check_number"] = nums[0]
+        elif tool == "rollover_inquiry":
+            self._rollover_fill(text)
+
+    _SUBJECTS = [(r"\b(waive|refund|reverse)\b.*\bfee|\bfee\b.*\b(waive|refund|reverse)", "Fee refund request"),
+                 (r"\bfee\b", "Question about a fee"),
+                 (r"check ?book|\bcheck order", "Checkbook order"),
+                 (r"deposit slip", "Deposit slips"),
+                 (r"\bstatement", "Statement request"),
+                 (r"\bsigner", "Authorized signer"),
+                 (r"\bdeposit\b", "Deposit not showing"),
+                 (r"overdraft protection", "Overdraft protection"),
+                 (r"account[- ]opening kit|supplies", "Office supplies")]
 
     def _draft_subject(self, details: str) -> str:
-        words = re.sub(r"^(please\s+)?(ask|tell|send|have)\s+(the\s+)?(service\s+(team|center)"
-                       r"\s*)?(to\s+|about\s+|whether\s+)?", "", details.strip(), flags=re.I).split()
+        for pat, subject in self._SUBJECTS:               # a short subject for common requests
+            if re.search(pat, details, re.I):
+                return subject
+        words = re.sub(r"^(please\s+)?(can\s+(you|we)\s+)?(ask|tell|send|have)\s+(a\s+(request|note|message)\s+"
+                       r"to\s+)?(the\s+)?(service\s+(team|center)\s*)?[:,-]?\s*(to\s+|about\s+|whether\s+)?",
+                       "", details.strip(), flags=re.I).split()
         subject = " ".join(words[:9])
         return (subject[:1].upper() + subject[1:])[:60] if subject else ""
 
     def _ticket_step(self) -> ToolResponse:
         """The next missing thing, in the form's order: account, details, Call Back #."""
         tool, d = self._ticket_tool(), self.task["draft"]
-        d["client_id"] = cid = self.task["picked"]["client_id"]
+        d["client_id"] = cid = self.task["picked"].get("client_id", "")
         last = self.last_check or {}
         if d.pop("_use_last_check", False) and last.get("client_id") == cid:
             d["account_id"] = last["account_id"]
             d["checks"] = [{k: last.get(k, "") for k in ("check_number", "amount", "date_written")}]
         office = tool == "misc_request" and any(d.get(k) for k in ("ibd", "office", "ip"))
+        if not cid and not office:
+            return self._ask_client()
         if not d.get("account_id") and not office:
             r = self._dispatch("list_accounts", {"client_id": cid})
             if r.status != "ok":
@@ -1337,9 +1413,15 @@ class GptConversation:
                           if all(self.services.checks.find_check(a["account_id"], n) for n in nums)]
                 if len(having) == 1:
                     cand = having
-            if len(cand) == 1 and tool != "misc_request":
+            said = " ".join(self.task.get("texts") or []).lower()  # "her Resource Checking account"
+            named = [a for a in cand if (a["account_type"].lower() in said
+                                         or f"...{a['account_last4']}" in said
+                                         or re.search(rf"\b{a['account_last4']}\b", said))]
+            if len(named) == 1:
+                d["account_id"] = named[0]["account_id"]
+            elif len(cand) == 1 and tool != "misc_request":
                 d["account_id"] = cand[0]["account_id"]
-            elif tool == "address_update":                   # the client's address: main account
+            elif tool in ("address_update", "rollover_inquiry"):   # the client's main account
                 main = next((a for a in accts if a["account_type"] == "AMA"), accts[0])
                 d["account_id"] = main["account_id"]
             elif len(cand) == 1 and tool == "misc_request" and len(accts) == 1:
@@ -1354,6 +1436,10 @@ class GptConversation:
                                  f"Which of {client.name}'s accounts is this for?", opts)
         if tool == "find_check":
             return self._check_status()
+        if tool == "rollover_inquiry":
+            r = self._rollover_step()
+            if r is not None:
+                return r
         if tool in ("stop_payment", "check_copy"):
             r = self._ticket_checks()
             if r is not None:
@@ -1371,8 +1457,12 @@ class GptConversation:
                  {"id": "additional_info", "label": "Additional Information",
                   "value": d.get("additional_info", ""), "required": True, "multiline": True}])
         if not (d.get("callback") or {}).get("number"):
+            # The advisor's own number: one they changed earlier, else the directory's
+            # (in production: the NetX360 profile). Shown on the review card to confirm.
             saved = (self.services.advisor_settings.get(self.session.advisor_id) or {}) \
                 .get("callback")
+            if not (saved and saved.get("number")) and getattr(self.services, "advisors", None):
+                saved = (self.services.advisors.get(self.session.advisor_id) or {}).get("callback")
             if saved and saved.get("number"):
                 d["callback"] = saved
             else:
@@ -1380,6 +1470,112 @@ class GptConversation:
                     "Which number should the Service Center call back? It is saved for your "
                     "next tickets."), "callback")
         return self._ticket_review()
+
+    # ------------------------------------------------------------ rollover check inquiry
+    _SENDERS = ["ADP", "Empower", "Fidelity", "John Hancock", "Principal", "Prudential", "Schwab",
+                "TIAA", "Transamerica", "Vanguard", "Voya"]
+    _DESKS = ["Jersey City", "Pittsburgh", "Lake Mary"]
+
+    def _rollover_fill(self, text: str) -> None:
+        """Read what the advisor wrote: amount, check #, sender, desk, mail type, date."""
+        d = self.task["draft"]
+        nums, amts = T.check_numbers(text), T.amounts(text)
+        if amts:
+            d["amount"] = amts[0]
+        if nums:
+            d["check_number"] = nums[0]
+        low = text.lower()
+        d["sent_from"] = next((x for x in self._SENDERS if x.lower() in low), d.get("sent_from", ""))
+        d["destination"] = next((x for x in self._DESKS if x.lower() in low), d.get("destination", ""))
+        if re.search(r"\b(overnight|fedex|ups|next[- ]day|express)\b", low):
+            d["delivery_method"] = "Overnight"
+        elif re.search(r"\b(regular mail|first[- ]class|usps|by mail|in the mail|mailed)\b", low):
+            d["delivery_method"] = "Regular mail"
+        m = re.search(r"tracking\s*(?:#|number|no\.?)?\s*:?\s*([A-Z0-9][A-Z0-9 ]{6,40}[A-Z0-9])", text, re.I)
+        if m:
+            d["tracking_number"] = re.sub(r"\s+", "", m.group(1))
+        sent = T.date_written_in(text)
+        if sent:
+            d["date_sent"] = sent
+        d["additional_info"] = T.redact(text)
+
+    def _rollover_fields(self) -> list[dict]:
+        t = T.template("rollover_inquiry")
+        out = []
+        for f in t["fields"]:
+            if f["id"] in ("account_id", "callback"):
+                continue
+            g = {k: f[k] for k in ("id", "label", "required", "type", "options", "suggestions",
+                                   "hint", "required_when") if k in f}
+            if f["id"] == "lockbox":
+                g["options_by_destination"] = f["options_by_destination"]
+            out.append(g)
+        return out
+
+    def _rollover_missing(self) -> list[str]:
+        d = self.task["draft"]
+        out = []
+        for f in self._rollover_fields():
+            need = f.get("required") or (f.get("required_when") and all(
+                d.get(k) == v for k, v in f["required_when"].items()))
+            if need and not str(d.get(f["id"]) or "").strip():
+                out.append(f["label"])
+        return out
+
+    def _rollover_form(self, notice: str = "") -> ToolResponse:
+        d = self.task["draft"]
+        if d.get("destination") and not d.get("lockbox"):
+            d["lockbox"] = (T.lockboxes(d["destination"]) or [""])[0]   # the desk's rollover box
+        values = {f["id"]: d.get(f["id"], "") for f in self._rollover_fields()}
+        acct = self.services.checks.account(d["account_id"]) if d.get("account_id") else None
+        missing = self._rollover_missing()
+        q = (f"For {acct.label if acct else 'the account'}. "
+             + ("Fill in the highlighted fields, then Continue." if missing
+                else "Everything is filled in from your message. Check it, then Continue."))
+        return self._ticket_card(cards.rollover_form_card(
+            q, values, self._rollover_fields(), info=d.get("_rollover_info", ""), notice=notice,
+            missing=missing), "rollover")
+
+    def _rollover_step(self) -> ToolResponse | None:
+        """
+        Look first (Guy, 11/11): a check that was received and credited needs no ticket.
+        Received but not credited, or not received yet: the ticket fills the gap.
+        """
+        d = self.task["draft"]
+        if not d.get("_looked"):
+            d["_looked"] = True
+            client = self.services.clients.get(d["client_id"])
+            acct = self.services.checks.account(d["account_id"])
+            got = None
+            if getattr(self.services, "incoming_checks", None) and client:
+                got = self.services.incoming_checks.find(client.name, d.get("amount", ""),
+                                                         d.get("check_number", ""),
+                                                         d.get("sent_from", ""))
+            if got and got["status"] == "credited":
+                to = self.services.checks.account(got.get("credited_account_id") or "")
+                msg = (f"Check {got['check_number']} from {got['sent_from']} for "
+                       f"{T.money(got['amount'])} was received in {got['desk']} on "
+                       f"{us_date(got['date_received'])} and credited to "
+                       f"{to.label if to else acct.label}. No inquiry is needed.")
+                self.task, self.pending = None, None
+                self.history.append({"role": "assistant", "content": msg})
+                return ToolResponse(status="ok", message=msg)
+            if got:                                           # received, couldn't be credited
+                d.update({"check_number": got["check_number"], "amount": got["amount"],
+                          "destination": got["desk"],
+                          "sent_from": d.get("sent_from") or got["sent_from"]})
+                d["_rollover_info"] = (
+                    f"A check matching this was received in {got['desk']} on "
+                    f"{us_date(got['date_received'])} but couldn't be credited: "
+                    + ("no account number on it" if not got.get("account_on_check")
+                       else "the details on it don't match an account")
+                    + f". This inquiry lets the desk credit it to {acct.label}.")
+            else:
+                d["_rollover_info"] = ("No check matching this has been received yet. Sending "
+                                       "the inquiry now lets the desk match it when it arrives.")
+        if not d.get("_form_done"):
+            return self._rollover_form()
+        return None
 
     def _misc_thin(self) -> bool:
         d = self.task["draft"]
@@ -1449,6 +1645,7 @@ class GptConversation:
             if found:
                 r["amount"] = r.get("amount") or found.amount
                 r["date_written"] = r.get("date_written") or found.date_written
+                self.last_topic = "check"
                 self.last_check = {"client_id": d["client_id"], "account_id": acct,
                                    "check_number": found.check_number, "amount": found.amount,
                                    "date_written": found.date_written}
@@ -1462,7 +1659,7 @@ class GptConversation:
                 if tool == "check_copy" and found.status != "posted":
                     return self._offer(f"Check {num} hasn't been paid yet, so there is no copy "
                                        "to request. Stop the payment instead?",
-                                       [{"label": "Stop this payment",
+                                       [{"label": "Stop this check",
                                          "value": "__ticket__:stop_payment"},
                                         {"label": "No, thanks", "value": "__no__"}])
             elif not r.get("keep"):
@@ -1517,8 +1714,10 @@ class GptConversation:
             self.pending = {"kind": "confirm", "tool": tool, "input": r.data["input"],
                             "text": " / ".join(self.task["texts"]) or self.session.utterance,
                             "panel": r.card}
-            if self.task.get("notice") or notice:
-                r.card["info"] = notice or self.task["notice"]
+            info = (notice or self.task.get("notice")
+                    or (self.task.get("draft") or {}).get("_rollover_info"))
+            if info:
+                r.card["info"] = info
             self._note(f"a review card for a {r.card['ticket']['title']} ticket is showing. "
                        "Nothing has been sent yet.")
             return r
@@ -1535,6 +1734,9 @@ class GptConversation:
             return p
         if code == "address_missing":
             return self._ticket_address_card(notice=r.message)
+        if code == "rollover_missing":
+            self.task["draft"]["_form_done"] = False
+            return self._rollover_form(notice=r.message)
         if code == "subject_missing":
             return self._ticket_fields_card(
                 "Request details", "What should the Service Center do?",
@@ -1575,6 +1777,9 @@ class GptConversation:
         if tool == "address_update":
             d["new_address"], d["_typed_address"] = [], ""
             return self._ticket_address_card()
+        if tool == "rollover_inquiry":
+            d["_form_done"] = False
+            return self._rollover_form()
         return self._ticket_review()
 
     def _ticket_pick(self, field: str, value: str, label: str) -> ToolResponse:
@@ -1597,7 +1802,7 @@ class GptConversation:
                 else:
                     old = rows[int(i)]["check_number"]
                     rows[int(i)]["check_number"] = v
-                    auto = f"{T.template(self._ticket_tool())['title']}: check "
+                    auto = f"{T.subject_prefix(self._ticket_tool())}: check "
                     if (d.get("subject") or "").startswith(auto):   # our own subject: follow the fix
                         d["subject"] = auto + ", ".join(r["check_number"] for r in rows)
                     if d.get("additional_info"):
@@ -1623,7 +1828,7 @@ class GptConversation:
         prefix, _, raw = text.strip().partition(":")
         try:
             got = json.loads(raw) if prefix in ("check_form", "callback_form", "ticket_address",
-                                                "fields_form") else None
+                                                "fields_form", "rollover_form") else None
         except json.JSONDecodeError:
             got = None
         if got is None:                                       # typed in the chat instead
@@ -1685,6 +1890,17 @@ class GptConversation:
             if not d.get("new_address") and not d.get("new_phone"):
                 return self._reshow("Please pick the new address or add the new phone number.")
             shown = ", ".join(d.get("new_address") or []) or d.get("new_phone", "")
+        elif prefix == "rollover_form":
+            for k in ("amount", "check_number", "delivery_method", "tracking_number", "date_sent",
+                      "sent_from", "destination", "lockbox", "additional_info"):
+                if k in got:
+                    d[k] = re.sub(r"\s+", " ", str(got[k] or "")).strip()[:1000]
+            missing = self._rollover_missing()
+            if missing:
+                return self._reshow("Please fill in: " + ", ".join(missing) + ".")
+            d["_form_done"] = True
+            shown = (f"Check {d['check_number']} · {T.money(d['amount'])}, {d['delivery_method']}, "
+                     f"sent {us_date(d['date_sent'])}, to {d['destination']}")
         elif prefix == "fields_form":
             for k in ("subject", "additional_info", "ibd", "office", "ip", "check_number"):
                 if k in got:
@@ -1700,8 +1916,45 @@ class GptConversation:
         self.history.append({"role": "user", "content": shown or "(details)"})
         return self._say(self._ticket_step())
 
+    _REF = re.compile(r"\b(it|that|this|that one|this one|(?:that|this|the|same|same) "
+                      r"(?:check|payment|one)|the one we (?:just )?(?:looked at|checked))\b", re.I)
+    _REF_STOP = re.compile(r"\b(stop|cancel|void|block|put a stop)\b", re.I)
+    _REF_COPY = re.compile(r"\b(cop(?:y|ies)|image|proof)\b", re.I)
+
+    def _check_reference(self, text: str) -> ToolResponse | None:
+        """
+        Ben (11/11): "did 1043 clear?" ... "ok, stop that payment then". A reference to the
+        check just discussed is resolved by code, then confirmed with one tap - never
+        filled in silently. A message naming a check number or another client is a new
+        request instead.
+        """
+        last = self.last_check or {}
+        if not last.get("client_id") or self.last_topic != "check" or self.task is not None:
+            return None
+        if not self._REF.search(text) or re.search(r"\b\d{3,}\b", text) or _CARD_WORD.search(text):
+            return None
+        tool = ("check_copy" if self._REF_COPY.search(text)
+                else "stop_payment" if self._REF_STOP.search(text) else None)
+        if tool is None:
+            return None
+        client = self.services.clients.get(last["client_id"])
+        if client is None:
+            return None
+        for w in set(re.findall(r"\b[A-Z][a-z]{2,}\b", text)):   # another client named: start clean
+            if any(c.client_id != client.client_id
+                   for c in self.services.clients.find(w, self.session.advisor_id)):
+                return None
+        what = (f"Stop check {last['check_number']}" if tool == "stop_payment"
+                else f"Request a copy of check {last['check_number']}")
+        self.history.append({"role": "user", "content": text})
+        return self._offer(f"{what} for {client.name} ({T.money(last.get('amount', ''))})?",
+                           [{"label": "Yes", "value": f"__ticket__:{tool}"},
+                            {"label": "Another check", "value": f"__ticket__:{tool}|other"}])
+
     def _ticket_from_check(self, tool: str) -> ToolResponse:
-        """'Stop this payment' / 'Request a copy' under a looked-up check."""
+        """'Stop this check' / 'Request a copy' under a looked-up check (or a confirmed
+        reference to it). "<tool>|other": the same client, a different check."""
+        tool, _, mode = tool.partition("|")
         last = self.last_check or {}
         name = {"stop_payment": "stop-payment", "check_copy": "check-copy"}.get(tool.strip())
         if not name or not last.get("client_id"):
@@ -1709,8 +1962,9 @@ class GptConversation:
         self._new_task(skills.get(name))
         self.task["texts"] = []
         self.task["draft"] = {"account_id": last["account_id"],
-                              "checks": [{k: last.get(k, "") for k in
-                                          ("check_number", "amount", "date_written")}]}
+                              "checks": [] if mode == "other" else
+                              [{k: last.get(k, "") for k in
+                                ("check_number", "amount", "date_written")}]}
         self.task["draft"]["draft_id"] = __import__("uuid").uuid4().hex
         stop = self._set_client(last["client_id"])
         if stop:
@@ -1742,6 +1996,7 @@ class GptConversation:
             return self._stop(f"Check {d['check_number']} was not found on {acct.label}.",
                               "check_not_found")
         c = r.data["check"]
+        self.last_topic = "check"
         self.last_check = {"client_id": d["client_id"], "account_id": d["account_id"],
                            "check_number": c["check_number"], "amount": c["amount"],
                            "date_written": c["date_written"]}
@@ -1753,18 +2008,18 @@ class GptConversation:
             line, acts, pend = "A stop payment is on file.", [], None
         else:
             line = "Not paid yet."
-            acts = [{"label": "Stop this payment", "value": "__ticket__:stop_payment"}]
+            acts = [{"label": "Stop this check", "value": "__ticket__:stop_payment"}]
             pend = self._pending_request("stop_payment", d["account_id"], c["check_number"])
         if pend:                                        # already requested: say so, no button
             word = "Copy requested" if c["status"] == "posted" else "Stop payment pending"
             line = f"{line.rstrip('.')} · {word} ({pend.replace('SR ', '')})."
             acts = []
         acts.append({"label": "Done", "value": "__no__"})
-        panel = cards.check_status_card(
-            f"Check {c['check_number']}",
-            [("Account", acct.label), ("Amount", T.money(c["amount"])),
-             ("Date written", us_date(c["date_written"])), ("Payee", c.get("payee", "")),
-             ("Status", line.rstrip("."))], line, acts)
+        # Ben (11/11): the answer first, yes / no, then one short line of detail.
+        answer = line.rstrip(".")
+        detail = (f"{T.money(c['amount'])}" + (f" to {c['payee']}" if c.get("payee") else "")
+                  + f", written {us_date(c['date_written'])} · {acct.label}")
+        panel = cards.check_status_card(f"Check {c['check_number']}: {answer}", [], detail, acts)
         self.task = None
         self.pending = {"kind": "options", "panel": panel}
         return ToolResponse(status="ok", message=cards.to_text(panel), card=panel)
@@ -1810,6 +2065,13 @@ class GptConversation:
     # ------------------------------------------------------------ AI call 1: routing
     def _route(self):
         current = self.task["skill"].name if self.task else "nothing"
+        just = "nothing"                                     # Ben (11/11): linked requests
+        if self.last_topic == "check" and (self.last_check or {}).get("check_number"):
+            c = self.services.clients.get(self.last_check["client_id"])
+            just = f"{c.name if c else 'a client'}'s check {self.last_check['check_number']}"
+        elif self.last_client:
+            c = self.services.clients.get(self.last_client)
+            just = f"{c.name}'s debit card" if c else "nothing"
         lines = [f"- {s.name}: {s.description} (typical words: {', '.join(s.triggers)})"
                  for s in skills.all_skills()]
         prompt = (
@@ -1822,7 +2084,7 @@ class GptConversation:
             "false: the system asks the advisor to confirm. Set certain to true only when the "
             "action is written clearly, or the message answers the assistant's question.\n"
             "- Return none when the latest message is not a request for one of these actions: "
-            "greetings, what can you do, balances, transactions, statements, PINs, which cards a "
+            "greetings, what can you do, balances, transactions, questions about what is on a statement, PINs, which cards a "
             "client has or their status, and anything else.\n"
             "- Return unclear when it is about a card action or a ticket but you cannot tell "
             "which one.\n"
@@ -1831,8 +2093,13 @@ class GptConversation:
             "check paid, cashed, cleared or drawn: check-status. If the advisor then says that "
             "check was lost, return stop-payment.\n"
             "- A change of the client's address or phone: address-update (a ticket, also when "
-            "they moved). Any other request for the service team about a checking account: "
-            "misc-request.\n"
+            "they moved). Any other servicing request about a checking account or the "
+            "advisor's office (checkbook, deposit slips, a deposit not showing, re-send a "
+            "statement, paper or e-statements, a fee or fee refund, a signer, account settings, "
+            "office supplies): misc-request. Not about the account at all (a couch, a flight): "
+            "none.\n"
+            f"- Just discussed: {just}. \"it\", \"that one\" or \"that payment\" refers to it "
+            "(e.g. stop that payment -> stop-payment when a check was just discussed).\n"
             f"- The conversation is currently handling: {current}. If the latest message answers "
             "a question the assistant just asked, or adds details to that request, return that "
             "same skill. If it asks for a different action, return that action's skill.\n"

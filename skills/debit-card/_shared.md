@@ -40,7 +40,7 @@ name to an id, and has decided this request belongs to the debit card agent.
 
 PIN resets and PIN changes (only the cardholder can do that), balances,
 transactions, statements, transfers, ACH, opening or closing accounts.
-Checks (stop a payment, a check copy, a check look-up), address changes and
+Checks (stop a check, a check copy, a check look-up), address changes and
 other checking requests are Service Center tickets, handled by the
 `skills/service-center/` skills. Say that this covers debit card
 actions only, and suggest the normal screens.

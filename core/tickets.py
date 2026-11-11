@@ -47,6 +47,12 @@ def template(tool: str) -> Optional[dict]:
     return templates().get(tool)
 
 
+def subject_prefix(tool: str) -> str:
+    """Start of the drafted Subject, in BNY's words ("Stop Payment: check 1043")."""
+    t = template(tool)
+    return t.get("subject_prefix") or t["title"]
+
+
 def is_ticket(tool: str) -> bool:
     return tool in templates()
 
@@ -144,8 +150,11 @@ def callback_problem(cb) -> Optional[str]:
 
 # ---------------------------------------------------------------- the ActionSpecs
 
+OFFICE_CLIENT_NAME = "Office request (no client)"
+
+
 def _account(services, ti):
-    if not ti.get("account_id"):
+    if not ti.get("account_id") or not ti.get("client_id"):
         return None
     for a in services.checks.accounts(ti["client_id"]):
         if a.account_id == ti["account_id"]:
@@ -238,6 +247,8 @@ def _precheck(t):
                                                          "(10 digits, e.g. 212-555-0142).")
                 ti["new_phone"] = p
             ti["new_address"] = lines[:4]
+        if t["tool"] == "rollover_inquiry":
+            _clean_rollover(t, ti)
         if t["tool"] == "misc_request":
             if not (ti.get("subject") or "").strip():
                 raise NotPossible("subject_missing", "Please add a subject.")
@@ -251,6 +262,50 @@ def _precheck(t):
             raise NotPossible("attachment_invalid", f"Up to {MAX_ATTACHMENTS} attachments per "
                                                     "ticket.")
     return check
+
+
+def field(t: dict, fid: str) -> dict:
+    return next((f for f in t["fields"] if f["id"] == fid), {})
+
+
+def lockboxes(destination: str) -> list[str]:
+    """Mock lockbox list per desk (tickets/rollover_inquiry.json) until BNY's arrives."""
+    t = template("rollover_inquiry") or {}
+    return field(t, "lockbox").get("options_by_destination", {}).get(destination, [])
+
+
+def _clean_rollover(t, ti) -> None:
+    """Retail Check Deposit Status Inquiry: the form's required fields and rules."""
+    amt = amount_ok(ti.get("amount", ""))
+    if amt is None:
+        raise NotPossible("rollover_missing", "Please add the check amount (a dollar amount).")
+    ti["amount"] = amt
+    num = re.sub(r"\D", "", str(ti.get("check_number", "")))
+    if not num or len(num) > 12:
+        raise NotPossible("rollover_missing", "Please add the check number (digits only).")
+    ti["check_number"] = num
+    if ti.get("delivery_method") not in field(t, "delivery_method")["options"]:
+        raise NotPossible("rollover_missing", "Please pick the method of delivery.")
+    if ti["delivery_method"] == "Overnight":
+        trk = re.sub(r"[^A-Za-z0-9]", "", str(ti.get("tracking_number", "")))
+        if len(trk) < 8:
+            raise NotPossible("rollover_missing", "Overnight delivery needs the tracking number.")
+        ti["tracking_number"] = trk[:40]
+    else:
+        ti.pop("tracking_number", None)
+    try:
+        sent = date.fromisoformat(str(ti.get("date_sent", "")))
+    except ValueError:
+        raise NotPossible("rollover_missing", "Please add the date the check was sent.")
+    if sent > date.today():
+        raise NotPossible("rollover_missing", "The date sent is in the future.")
+    if ti.get("destination") not in field(t, "destination")["options"]:
+        raise NotPossible("rollover_missing", "Please pick the destination desk.")
+    boxes = lockboxes(ti["destination"])
+    if ti.get("lockbox") and ti["lockbox"] not in boxes:
+        raise NotPossible("rollover_missing", f"That lockbox is not one of {ti['destination']}'s.")
+    if ti.get("sent_from"):
+        ti["sent_from"] = re.sub(r"\s+", " ", str(ti["sent_from"])).strip()[:60]
 
 
 def check_attachments(services, ti) -> None:
@@ -294,7 +349,13 @@ def ticket_fields(t: dict, ti: dict, client, account) -> list[tuple[str, str]]:
         elif fid == "new_address":
             if ti.get("new_address"):
                 out.append(("New Address", ", ".join(ti["new_address"])))
+        elif fid == "amount" and ti.get("amount"):
+            out.append(("Amount", money(ti["amount"])))
+        elif fid == "date_sent" and ti.get("date_sent"):
+            out.append(("Date Sent", us_date(ti["date_sent"])))
         elif fid == "callback":
+            if ti.get("_contact_name"):
+                out.append(("Name", ti["_contact_name"]))
             out.append(("Call Back #", callback_text(ti.get("callback"))))
         elif ti.get(fid):
             out.append((f["label"], str(ti[fid])))
@@ -308,12 +369,19 @@ def _summary(t):
     return summary
 
 
-def review(t: dict, ti: dict, client, services) -> dict:
+def _advisor_name(services, advisor_id: str) -> str:
+    d = getattr(services, "advisors", None)
+    return ((d.get(advisor_id) or {}).get("name", "") if d and advisor_id else "")
+
+
+def review(t: dict, ti: dict, client, services, advisor_id: str = "") -> dict:
     """The short review card: key facts up top, everything else behind 'Show all fields'."""
     account = _account(services, ti)
+    ti = {**ti, "_contact_name": _advisor_name(services, advisor_id)}
     key = [("Client", client.name),
            ("Account", account.label if account else
-            " · ".join(f"{k.upper()} {ti[k]}" for k in ("ibd", "office", "ip") if ti.get(k)))]
+            " · ".join(f"{ {'ibd': 'IBD', 'office': 'Office', 'ip': 'IP'}[k]} # {ti[k]}"
+                       for k in ("ibd", "office", "ip") if ti.get(k)))]
     if t["tool"] in ("stop_payment", "check_copy"):
         for r in ti.get("checks") or []:
             key.append(("Check", _check_line(r)))
@@ -324,6 +392,15 @@ def review(t: dict, ti: dict, client, services) -> dict:
             key.append(("New phone", ti["new_phone"]))
     if t["tool"] == "misc_request":
         key.append(("Subject", ti.get("subject", "")))
+    if t["tool"] == "rollover_inquiry":
+        key.append(("Check", f"Check {ti.get('check_number', '')} · {money(ti.get('amount', ''))}"
+                             + (f" from {ti['sent_from']}" if ti.get("sent_from") else "")))
+        how = ti.get("delivery_method", "")
+        if ti.get("tracking_number"):
+            how += f" (tracking {ti['tracking_number']})"
+        key.append(("Sent", f"{how}, {us_date(ti['date_sent'])}" if ti.get("date_sent") else how))
+        key.append(("Destination", " · ".join(x for x in (ti.get("destination"),
+                                                         ti.get("lockbox")) if x)))
     notes = []
     for r in ti.get("checks") or []:
         if t["tool"] == "stop_payment" and not r.get("on_file") and account is not None:
@@ -346,13 +423,15 @@ def review(t: dict, ti: dict, client, services) -> dict:
         "warnings": notes,
         "attachments": {"max": MAX_ATTACHMENTS, "max_mb": 10, "types": "PDF, JPG or PNG",
                         "note": ATTACH_NOTE, "files": ti.get("attachments") or []},
-        "can_edit_details": t["tool"] in ("stop_payment", "check_copy", "address_update"),
+        "can_edit_details": t["tool"] in ("stop_payment", "check_copy", "address_update",
+                                          "rollover_inquiry"),
     }
 
 
 def _execute(t):
     def execute(svc, session, ti, client):
         account = _account(svc, ti)
+        ti = {**ti, "_contact_name": _advisor_name(svc, session.advisor_id)}
         now = datetime.now(timezone.utc)
         ticket = {
             "draft_id": ti["draft_id"],

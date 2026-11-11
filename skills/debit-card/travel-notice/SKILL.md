@@ -1,10 +1,10 @@
 ---
 name: travel-notice
+description: Record upcoming travel so the card is not blocked abroad.
 tool: travel_notice
 lookups: find_client, list_cards
-priority: 80
 triggers: travel, trip, abroad, flying, going to, overseas, holiday, vacation
-description: Record upcoming travel so the card is not blocked abroad.
+priority: 80
 ---
 
 # Travel notice

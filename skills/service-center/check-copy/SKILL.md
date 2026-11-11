@@ -1,11 +1,11 @@
 ---
 name: check-copy
-tool: check_copy
-kind: ticket
-lookups: find_client, list_accounts, find_check
-priority: 94
-triggers: copy of a check, copy of the check, copy of check, check copy, image of a check, image of the check, check image, proof of payment, front and back of the check
 description: Service Center ticket: request a copy of a paid check.
+kind: ticket
+tool: check_copy
+lookups: find_client, list_accounts, find_check
+triggers: copy of a check, copy of the check, copy of check, check copy, image of a check, image of the check, check image, proof of payment, front and back of the check
+priority: 94
 ---
 
 # Check Copy (Service Center ticket)

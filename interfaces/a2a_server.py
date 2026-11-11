@@ -132,7 +132,8 @@ def handle(payload: dict) -> dict:
 
 _BUTTON_PREFIXES = ("address_pick:", "client_pick:", "travel_form:", "confirm_with:",
                     "text_input:", "set_dates:", "check_form:", "callback_form:",
-                    "ticket_address:", "fields_form:", "__ticket__:")
+                    "ticket_address:", "fields_form:", "rollover_form:", "__followup__:",
+                    "__ticket__:")
 _BUTTON_WORDS = {"__cancel__", "__actions__", "__no__", "__other__", "__another__",
                  "confirm", "confirm_ack", "cancel", "change_dates", "__edit_details__"}
 
@@ -143,7 +144,7 @@ def _log_chat(session, payload: dict, utterance: str, reply: dict) -> None:
     raw = (utterance or "").strip()
     clicked = bool(display and display != raw) or raw.startswith(_BUTTON_PREFIXES) \
         or raw.lower() in _BUTTON_WORDS
-    kind = "Form" if raw.startswith(_BUTTON_PREFIXES[:-1]) \
+    kind = "Form" if raw.startswith(_BUTTON_PREFIXES[:-2]) \
         else ("Button" if clicked else "Typed")
     try:
         audit.chat_turn(session, display or raw, raw, kind, reply)

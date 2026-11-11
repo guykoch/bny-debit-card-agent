@@ -1,10 +1,10 @@
 ---
 name: lock-card
+description: Temporarily lock a client's Corestone debit card. Reversible with unlock-card.
 tool: lock_card
 lookups: find_client, list_cards
-priority: 60
 triggers: lock, block the card, freeze, suspend, stop the card
-description: Temporarily lock a client's Corestone debit card. Reversible with unlock-card.
+priority: 60
 ---
 
 # Lock card

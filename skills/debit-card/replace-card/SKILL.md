@@ -1,10 +1,10 @@
 ---
 name: replace-card
+description: Cancel the current card and issue a replacement.
 tool: replace_card
 lookups: find_client, list_cards
-priority: 70
 triggers: replace, new card, reissue, damaged, broken, cracked, worn out, never arrived, never received, not arrived, hasn't arrived
-description: Cancel the current card and issue a replacement.
+priority: 70
 ---
 
 # Replace card

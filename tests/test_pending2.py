@@ -89,8 +89,7 @@ def run():
     _, conv = fresh(CodeOnly())
     conv.send("Jane Miller moved, change her address")
     pid = address_lookup.suggest("1 Bryant Park")["suggestions"][0]["id"]
-    conv.send("ticket_address:" + json.dumps({"pick": pid, "unit": "Apt 12C", "phone": ""}))
-    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
+    r = conv.send("ticket_address:" + json.dumps({"pick": pid, "unit": "Apt 12C", "phone": ""}))
     check("T-49a", "the unit sent with 'Use this address' is on the ticket's review card",
           r.status == "awaiting_confirmation" and "Apt 12C" in json.dumps(r.data["input"]))
 

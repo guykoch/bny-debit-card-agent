@@ -1,11 +1,11 @@
 ---
 name: address-update
-tool: address_update
-kind: ticket
-lookups: find_client, list_accounts, find_check
-priority: 58
-triggers: address to, 's address, change address, change the address, change her address, change his address, update address, update the address, update her address, update his address, new address, moved, mailing address, change phone, new phone, phone number
 description: Service Center ticket: change the client's address or phone on the account.
+kind: ticket
+tool: address_update
+lookups: find_client, list_accounts, find_check
+triggers: address to, 's address, change address, change the address, change her address, change his address, update address, update the address, update her address, update his address, new address, moved, mailing address, change phone, new phone, phone number, home address
+priority: 58
 ---
 
 # Address Update (Service Center ticket)

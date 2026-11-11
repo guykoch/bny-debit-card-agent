@@ -160,6 +160,23 @@ T-15a, T-35a/b, T-36a/b. Old update-address tests T-28a-g rewritten for the tick
 **Redeploy Convex this time:** `convex-demo-db/` changed (tables `tickets`,
 `advisor_settings`; file storage functions). After pushing, run `npx convex deploy`.
 
+## Feedback from Ben, November 11 (PLAN-BEN-NOV11.md)
+
+Checks: `python -m tests.test_tickets` (T-61 to T-63).
+
+| Fix | What changed | Where |
+|---|---|---|
+| F-61 | **"Stop a check"** in the menu, buttons and review card; "stop payment", "put a stop on 1043", "void" are still understood (a bare check number counts). BNY's form name stays Stop Payment. | `tickets/stop_payment.json` (`title`, `subject_prefix`), llm_runtime labels, stop-payment skill triggers |
+| F-61 | **Call Back # prefilled per advisor** from a new advisor directory (`advisors.csv`: name and Call Back #), shown on every review card with a **Change** link; a change is saved for that advisor. The form's Name field is filled with the advisor's name. | `integrations/mock/data/advisors.csv`, `MockAdvisorDirectory`, `_ticket_step`, web `renderTicketReview` |
+| F-61 | **Check look-up answers first**: "Check 1043: Not paid yet" (or "Paid on 10/18/2026") with one detail line, and a **Stop this check** / Request a copy button. | `_check_status`, web `renderCheckStatus` |
+| F-61 | **Linked requests**: after a check is discussed, "ok, stop that payment then", "stop it" or "a copy of it" asks "Stop check 1043 for Jane Miller ($250.00)?" Yes / Another check / Cancel. After a card action, "it" means the card again. The AI's routing gets one line of what was just discussed. "Yes, order a replacement" after a lost / stolen report keeps the client, card, reason and flag (no "Which client?"). | llm_runtime `_check_reference`, `last_topic`, `_follow_up`, `_route` |
+| F-62 | **Rollover check inquiry** (Retail Check Deposit Status Inquiry): looks first at checks received at the desks (`incoming_checks.csv`). Received and credited: says so, no ticket. Received but not credited, or not received yet: one form card like BNY's, filled from the advisor's words and the received check, missing fields highlighted; then review and Send. Overnight needs a tracking #; Date Sent not in the future; lockbox must belong to the desk (mock lockbox numbers). | `tickets/rollover_inquiry.json`, `tools/rollover_inquiry.json`, `skills/service-center/rollover-inquiry`, `core/tickets.py` `_clean_rollover`, llm_runtime `_rollover_*`, web `renderRolloverForm` |
+| F-63 | **Misc boundary written down**: the skill says what is in (checkbooks, deposit slips, deposits, statement requests, fees, signers, settings, office requests) and out. Statement *requests* are no longer out of scope. **Office requests** need no client (IBD / Office / IP #). An account named in the message is used. Short subjects for common requests ("Fee refund request", "Checkbook order"). All skill files now start with name and description. | `skills/service-center/misc-request/SKILL.md`, llm_runtime `_route`, `_SUBJECTS`, `core/guardrails.py` (office requests) |
+| F-64 | Typing "cancel" on an open card cancels it (was fixed in F-60); "put a stop on 1043" is no longer asked "a check or the card?". | llm_runtime |
+
+Duplicate requests: still a warning with Send another (not blocked), as decided with Guy.
+**Deploy:** push only. No Convex change this round.
+
 ## Convex
 
 `convex-demo-db/` changed with F-28 (addresses table and functions). If

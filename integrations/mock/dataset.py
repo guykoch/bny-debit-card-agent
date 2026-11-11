@@ -18,7 +18,8 @@ _DIR = os.path.join(os.path.dirname(__file__), "data")
 # "Do it now" card actions, then the Service Center tickets.
 ALL_ACTIONS = {"view", "lock_card", "unlock_card", "replace_card",
                "report_lost_stolen", "travel_notice",
-               "stop_payment", "check_copy", "address_update", "misc_request"}
+               "stop_payment", "check_copy", "address_update", "misc_request",
+               "rollover_inquiry"}
 
 
 def _rows(filename: str) -> list[dict]:
@@ -67,6 +68,10 @@ def _load_grants() -> dict[str, dict[str, set]]:
 CLIENTS = _load_clients()
 ACCOUNTS = _rows("accounts.csv")      # read-only demo data: AMA / Resource Checking accounts
 CHECKS = _rows("checks.csv")          # read-only demo data: checks written on those accounts
+# The advisor directory (in production: the NetX360 sign-in profile): name and Call Back #.
+ADVISORS = {r["advisor_id"]: r for r in _rows("advisors.csv")}
+# Checks received at the money desks (rollover checks). Read-only demo data.
+INCOMING_CHECKS = _rows("incoming_checks.csv")
 CARDS = _load_cards()
 ADDRESSES = _load_addresses()
 GRANTS = _load_grants()

@@ -1,0 +1,38 @@
+{
+  "title": "Check Deposit Status Inquiry",
+  "menu_label": "Rollover check inquiry",
+  "skill": "rollover-inquiry",
+  "subject_prefix": "Rollover check",
+  "category": "Asset Movement",
+  "request": "Checks",
+  "request_type": "Retail Check Deposit Status Inq",
+  "note": "",
+  "fields": [
+    {"id": "account_id", "label": "Account #", "required": true, "type": "account"},
+    {"id": "amount", "label": "Amount", "required": true, "type": "money"},
+    {"id": "check_number", "label": "Check #", "required": true, "type": "text"},
+    {"id": "delivery_method", "label": "Method of Delivery", "required": true, "type": "choice",
+     "options": ["Regular mail", "Overnight"]},
+    {"id": "tracking_number", "label": "Tracking #", "required": false, "type": "text",
+     "required_when": {"delivery_method": "Overnight"}},
+    {"id": "date_sent", "label": "Date Sent", "required": true, "type": "date"},
+    {"id": "sent_from", "label": "Sent From", "required": false, "type": "text",
+     "suggestions": ["ADP", "Empower", "Fidelity", "John Hancock", "Principal", "Prudential",
+                     "Schwab", "TIAA", "Transamerica", "Vanguard", "Voya"]},
+    {"id": "destination", "label": "Destination", "required": true, "type": "choice",
+     "options": ["Jersey City", "Pittsburgh", "Lake Mary"]},
+    {"id": "lockbox", "label": "Lockbox", "required": false, "type": "choice",
+     "options_by_destination": {
+       "Jersey City": ["Rollover Lockbox-271536", "Retail Lockbox-271540"],
+       "Pittsburgh": ["Rollover Lockbox-382084", "Retail Lockbox-382091"],
+       "Lake Mary": ["Rollover Lockbox-519027", "Retail Lockbox-519033"]}},
+    {"id": "additional_info", "label": "Additional Information", "required": false,
+     "type": "long_text", "hint": "Please include any other information that will help the team identify the check"},
+    {"id": "callback", "label": "Call Back #", "required": true, "type": "callback"}
+  ],
+  "attachment_hint": "Optional: a copy of the check or mailing label, a shipping confirmation, or a split breakdown.",
+  "ask_order": ["account_id", "form", "callback"],
+  "tool": "rollover_inquiry",
+  "common_note": "Please be advised, DO NOT key out a checking account number or debit card number on your Service Center requests.",
+  "mock_note": "Lockbox numbers are mock values until BNY provides the real list."
+}

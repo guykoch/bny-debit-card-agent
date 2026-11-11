@@ -1,5 +1,6 @@
 {
   "title": "Check Copy",
+  "subject_prefix": "Check Copy",
   "menu_label": "Request a check copy",
   "skill": "check-copy",
   "category": "AMA/Resource Checking",

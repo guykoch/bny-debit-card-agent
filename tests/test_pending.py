@@ -121,7 +121,6 @@ def run():
     check("T-34a", "the ticket's address card opens", kind(r) == "ticket_address")
     hits = address_lookup.suggest("1100 Congress")["suggestions"]
     r = conv.send("ticket_address:" + json.dumps({"pick": hits[0]["id"], "unit": "", "phone": ""}))
-    r = conv.send("callback_form:" + json.dumps({"kind": "US", "number": "2125550100", "ext": ""}))
     check("T-34a", "review card for the ticket; nothing on file changed",
           r.status == "awaiting_confirmation" and r.data["tool"] == "address_update"
           and not any("Congress" in a.address for a in svc.clients.addresses("C-15644")))
@@ -238,9 +237,9 @@ def run():
     svc, conv = fresh(CodeOnly())
     calls = 0
     r = conv.send("__actions__")
-    check("T-45a", "nine actions in two groups (Do it now / Send a ticket), plus Cancel",
-          len(labels(r)) == 9 and has_cancel(r)
-          and [a.get("group") for a in r.card["actions"][:9]] == ["now"] * 5 + ["ticket"] * 4)
+    check("T-45a", "ten actions in two groups (Do it now / Send a ticket), plus Cancel",
+          len(labels(r)) == 10 and has_cancel(r)
+          and [a.get("group") for a in r.card["actions"][:10]] == ["now"] * 5 + ["ticket"] * 5)
     r = conv.send("unlock-card")
     check("T-45a", "then 'Which client?' with suggestions", kind(r) == "client_input")
     r = conv.send("client_pick:C-44090")

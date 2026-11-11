@@ -158,6 +158,22 @@ def check_status_card(title: str, fields: list[tuple[str, str]], status_line: st
             "actions": [{**a, "style": a.get("style", "option")} for a in actions]}
 
 
+def rollover_form_card(question: str, values: dict, fields: list[dict], info: str = "",
+                       notice: str = "", missing: Optional[list] = None) -> dict:
+    """
+    The Retail Check Deposit Status Inquiry on one card, laid out like BNY's form:
+    everything the chat could fill is filled; missing required fields are highlighted.
+    """
+    card = {"kind": "rollover_form", "title": "Check Deposit Status Inquiry", "message": question,
+            "values": values, "form_fields": fields, "missing": missing or [],
+            "actions": [dict(CANCEL)]}
+    if info:
+        card["info"] = info
+    if notice:
+        card["notice"] = notice
+    return card
+
+
 def to_text(card: dict) -> str:
     """Plain-text fallback. Same content, no rendering required."""
     if card is None:
@@ -185,6 +201,10 @@ def to_text(card: dict) -> str:
                          f"  Date written {r.get('date_written') or '-'}")
     if card.get("kind") == "callback_form":
         lines.append("  (type the Call Back #)")
+    if card.get("kind") == "rollover_form":
+        for f in card.get("form_fields") or []:
+            v = (card.get("values") or {}).get(f["id"]) or ("(required)" if f.get("required") else "-")
+            lines.append(f"  {f['label']}: {v}")
     if card.get("kind") == "fields_form":
         for f in card.get("inputs") or []:
             lines.append(f"  {f['label']}: {f.get('value') or ('(required)' if f.get('required') else '-')}")
@@ -193,7 +213,7 @@ def to_text(card: dict) -> str:
         lines += [f"  {f['label']}: {f['value']}" for f in t.get("key", [])]
         cb = (t.get("editable") or {}).get("callback") or {}
         if cb.get("number"):
-            lines.append(f"  Call Back #: {cb['number']}")
+            lines.append(f"  Call Back #: {cb['number']}" + (f" ext {cb['ext']}" if cb.get("ext") else ""))
     if card.get("text_input"):
         ti = card["text_input"]
         lines.append(f"  {ti.get('label', 'Text')}: {ti.get('value') or '(required)'}")

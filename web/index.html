@@ -245,6 +245,16 @@
   .att button.linkb { color: var(--blue); font-size: 13px; font-weight: 600; }
   .att span.err { flex: none; }
   .attnote { font-size: 11px; color: var(--hint); margin-top: 2px; }
+  .rgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 8px; }
+  .rcell .lbl { font-size: 11.5px; color: var(--hint); margin-bottom: 2px; }
+  .rcell input, .rcell select, .rcell textarea { width: 100%; font: inherit; font-size: 14px; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--white); color: var(--text); }
+  .rcell textarea { min-height: 54px; resize: vertical; }
+  .rcell.wide { grid-column: 1 / 3; }
+  .rcell .miss, .rcell .udate.miss .udbtn { border-color: var(--red); background: var(--red-tint); }
+  .rcell .udbtn { width: 100%; }
+  @media (max-width: 600px) { .rgrid { grid-template-columns: 1fr; } .rcell.wide { grid-column: 1; }
+    .rcell input, .rcell select, .rcell textarea { font-size: 16px; } }
   @media (max-width: 600px) {
     .grp.collapsible .grph { cursor: pointer; }
     .grp.collapsible .grph .tw { display: inline; }
@@ -307,7 +317,7 @@ const ICONS = {
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
 };
-const WELCOME = "Hi, I can help with your clients' debit cards (lock, unlock, replace, report lost or stolen, travel notices) and send Service Center tickets (stop a payment, a check copy, an address change, other requests). Type a request, or tap Actions.";
+const WELCOME = "Hi, I can help with your clients' debit cards (lock, unlock, replace, report lost or stolen, travel notices) and send Service Center tickets (stop a check, a check copy, an address change, other requests). Type a request, or tap Actions.";
 
 const $ = (id) => document.getElementById(id);
 const msgs = $("msgs"), input = $("input"), sendBtn = $("send"), advisorSel = $("advisor");
@@ -924,14 +934,104 @@ function renderFieldsForm(card) {
   return c;
 }
 
+// Retail Check Deposit Status Inquiry (rollover check): one card laid out like BNY's form.
+// Filled from the advisor's words; missing required fields are outlined in red.
+function renderRolloverForm(card) {
+  const c = el("div", "card addr");
+  cardHead(c, card);
+  const v = card.values || {}, missing = new Set(card.missing || []), box = {};
+  const grid = el("div", "rgrid");
+  function cell(f, input, wide) {
+    const w = el("div", "rcell" + (wide ? " wide" : ""));
+    w.appendChild(el("div", "lbl", esc(f.label) + (f.required ? " *" : "")));
+    w.appendChild(input);
+    if (missing.has(f.label)) input.classList.add("miss");
+    if (f.hint) w.appendChild(el("div", "attnote", esc(f.hint)));
+    grid.appendChild(w); return w;
+  }
+  function select(opts, val, blank) {
+    const sel = el("select", "rsel");
+    if (blank) sel.appendChild(new Option(blank, ""));
+    opts.forEach(o => sel.appendChild(new Option(o, o, false, o === val)));
+    if (val && !opts.includes(val)) sel.value = "";
+    return sel;
+  }
+  const byId = {}; (card.form_fields || []).forEach(f => byId[f.id] = f);
+  let trackCell = null, lockSel = null;
+  (card.form_fields || []).forEach(f => {
+    let inp;
+    if (f.id === "delivery_method") {
+      inp = select(f.options, v[f.id], "Select…");
+      inp.onchange = () => { trackCell.style.display = inp.value === "Overnight" ? "" : "none"; valid(); };
+    } else if (f.id === "destination") {
+      inp = select(f.options, v[f.id], "Select…");
+      inp.onchange = () => { fillLock(); valid(); };
+    } else if (f.id === "lockbox") {
+      inp = lockSel = el("select", "rsel");
+    } else if (f.id === "date_sent") {
+      inp = usDateBox("rd"); inp.max = isoLocal(new Date()); if (v[f.id]) inp.value = v[f.id];
+      inp.addEventListener("change", valid);
+    } else if (f.id === "additional_info") {
+      inp = el("textarea"); inp.maxLength = 1000; inp.value = v[f.id] || "";
+    } else {
+      inp = inputBox(f.id === "amount" ? "e.g. 142300.00" : "", v[f.id]);
+      if (f.id === "amount") inp.inputMode = "decimal";
+      if (f.suggestions) {
+        const dl = el("datalist"); dl.id = "dl-" + Math.random().toString(36).slice(2);
+        f.suggestions.forEach(x => dl.appendChild(new Option(x, x))); c.appendChild(dl);
+        inp.setAttribute("list", dl.id);
+      }
+      inp.addEventListener("input", valid);
+    }
+    box[f.id] = inp;
+    const w = cell(f, inp, f.id === "additional_info");
+    if (f.id === "tracking_number") { trackCell = w; w.style.display = v.delivery_method === "Overnight" ? "" : "none"; }
+  });
+  function fillLock() {
+    if (!lockSel) return;
+    const opts = ((byId.lockbox || {}).options_by_destination || {})[box.destination.value] || [];
+    const keep = lockSel.value || v.lockbox;
+    lockSel.innerHTML = ""; opts.forEach(o => lockSel.appendChild(new Option(o, o, false, o === keep)));
+    lockSel.disabled = !opts.length;
+  }
+  fillLock();
+  c.appendChild(grid);
+  const err = el("div", "dh err"); err.style.fontSize = "12px"; c.appendChild(err);
+  const go = el("button", "b primary", "Continue");
+  function value(id) { const x = box[id]; return x ? String(x.value || "").trim() : ""; }
+  function valid() {
+    const need = ["amount", "check_number", "delivery_method", "date_sent", "destination"];
+    if (value("delivery_method") === "Overnight") need.push("tracking_number");
+    const miss = need.filter(id => !value(id));
+    const amtBad = value("amount") && !moneyOk(value("amount"));
+    need.forEach(id => box[id] && box[id].classList.toggle("miss", !value(id)));
+    err.textContent = amtBad ? "The amount must be a dollar amount, e.g. 142300.00." : "";
+    go.disabled = miss.length > 0 || amtBad; return !go.disabled;
+  }
+  go.onclick = () => {
+    if (busy || !valid()) return;
+    const out = {}; Object.keys(box).forEach(id => out[id] = value(id));
+    out.amount = out.amount.replace(/[$,\s]/g, "");
+    lockCard(c, go); c.querySelectorAll("input, select, textarea").forEach(i => i.disabled = true);
+    send("rollover_form:" + JSON.stringify(out),
+         `Check ${out.check_number} · $${Number(out.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, ${out.delivery_method}, sent ${niceDate(out.date_sent)}, to ${out.destination}`);
+  };
+  valid();
+  cancelRow(c, card.actions, [go]);
+  return c;
+}
+
 // A looked-up check (read-only) with what can be done next.
 function renderCheckStatus(card) {
   const c = el("div", "card");
   topLines(c, card);
-  c.appendChild(el("h4", null, esc(card.title)));
-  const f = el("div", "fields");
-  (card.fields || []).forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
-  c.appendChild(f);
+  const h = el("h4", null, esc(card.title)); h.style.fontSize = "15.5px"; c.appendChild(h);   // the yes / no answer
+  if (card.message) { const m = el("div", "hint", esc(card.message)); m.style.fontStyle = "normal"; m.style.margin = "0 0 10px"; c.appendChild(m); }
+  if ((card.fields || []).length) {
+    const f = el("div", "fields");
+    card.fields.forEach(x => f.appendChild(el("div", null, `<span>${esc(x.label)}</span><span>${esc(x.value)}</span>`)));
+    c.appendChild(f);
+  }
   const btns = el("div", "btns");
   (card.actions || []).forEach(a => {
     const btn = el("button", "b " + (a.value === "__no__" || a.style === "cancel" ? "" : "alt"), esc(a.label));
@@ -979,14 +1079,25 @@ function renderTicketReview(card) {
   subjF.append(el("div", "lbl", "Subject" + (ed.subject_required ? " (required)" : " (optional)")), subj);
   const infoF = el("div", "field"), info = el("textarea"); info.maxLength = 1000; info.value = ed.additional_info || "";
   infoF.append(el("div", "lbl", "Additional Information" + (ed.info_required ? " (required)" : " (optional)")), info);
-  const cbF = el("div", "field"); cbF.appendChild(el("div", "lbl", "Call Back #"));
+  // Call Back #: prefilled from the advisor's profile; Change opens the fields right here.
+  const cbF = el("div", "field"); cbF.style.display = "none";
+  cbF.appendChild(el("div", "lbl", "Call Back # (saved for your next tickets)"));
   const cb = callbackFields(cbF, ed.callback);
-  all.append(subjF, infoF, cbF);
+  f.after(cbF);
+  all.append(subjF, infoF);
   if (t.rule) all.appendChild(el("div", "rule", esc(t.rule)));
   c.appendChild(all);
   function paintCb() {
     const v = cb.value();
-    cbLine.innerHTML = v.number ? `<span>Call Back #</span><span>${esc(v.number + (v.ext ? " ext " + v.ext : ""))}</span>` : "";
+    cbLine.innerHTML = `<span>Call Back #</span><span>${esc(v.number ? v.number + (v.ext ? " ext " + v.ext : "") : "(required)")}</span>`;
+    const ch = el("button", "linkb", cbF.style.display === "none" ? "Change" : "Done"); ch.type = "button";
+    ch.style.marginLeft = "8px";
+    ch.onclick = () => {
+      if (cbF.style.display !== "none" && !cb.ok()) return;      // keep it open until valid
+      cbF.style.display = cbF.style.display === "none" ? "" : "none"; paintCb();
+      if (cbF.style.display === "") cb.num.focus();
+    };
+    cbLine.lastChild.appendChild(ch);
   }
 
   // Attachments
@@ -1044,7 +1155,7 @@ function renderTicketReview(card) {
   }
   [subj, info, cb.num, cb.ext].forEach(x => x.addEventListener("input", () => { paintCb(); valid(); }));
   c.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => { paintCb(); valid(); }));
-  if (!cb.ok()) { all.style.display = ""; showAll.textContent = "Hide fields"; }
+  if (!cb.ok()) cbF.style.display = "";
 
   const btns = el("div", "btns");
   (card.actions || []).forEach(a => {
@@ -1156,6 +1267,7 @@ function renderReply(r) {
   if (card && card.kind === "ticket_address") { addBot(renderTicketAddress(card), false); return; }
   if (card && card.kind === "fields_form") { addBot(renderFieldsForm(card), false); return; }
   if (card && card.kind === "check_status") { addBot(renderCheckStatus(card), false); return; }
+  if (card && card.kind === "rollover_form") { addBot(renderRolloverForm(card), false); return; }
   if (card && card.kind === "address_input") { addBot(renderAddress(card), false); return; }
   if (card && card.kind === "client_input") { addBot(renderClientInput(card), false); return; }
   if (card && card.kind === "travel_form") { addBot(renderTravelForm(card), false); return; }

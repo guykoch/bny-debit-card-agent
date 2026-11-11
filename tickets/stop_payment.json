@@ -1,6 +1,7 @@
 {
-  "title": "Stop Payment",
-  "menu_label": "Stop a payment",
+  "title": "Stop a check",
+  "menu_label": "Stop a check",
+  "subject_prefix": "Stop Payment",
   "skill": "stop-payment",
   "category": "AMA/Resource Checking",
   "request": "Stop Payment",

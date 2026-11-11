@@ -1,11 +1,11 @@
 ---
 name: stop-payment
-tool: stop_payment
-kind: ticket
-lookups: find_client, list_accounts, find_check
-priority: 95
-triggers: stop payment, stop a payment, stop the payment, stop a check, stop the check, stop check, cancel a check, cancel the check, cancel check, void a check, void the check, void check, check was lost, check got lost, check lost, lost check, check in the mail
 description: Service Center ticket: stop payment on one or more checks (e.g. lost in the mail).
+kind: ticket
+tool: stop_payment
+lookups: find_client, list_accounts, find_check
+triggers: stop payment, put a stop, a stop on, stop a payment, stop the payment, stop a check, stop the check, stop check, cancel a check, cancel the check, cancel check, void a check, void the check, void check, check was lost, check got lost, check lost, lost check, check in the mail
+priority: 95
 ---
 
 # Stop Payment (Service Center ticket)

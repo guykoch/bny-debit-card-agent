@@ -226,8 +226,9 @@ def run():
           and r.data["input"]["flag_transactions"] is False)
     r = conv.send("confirm")
     check("offers a replacement", r.card.get("follow_up", "").startswith("Would you like"))
-    check("with Yes / No buttons", [a["value"] for a in r.card["follow_up_actions"]]
-          == ["Yes, order a replacement", "__no__"])
+    check("with Yes / No buttons; Yes keeps the client and card (Ben, 11/11)",
+          [a["label"] for a in r.card["follow_up_actions"]] == ["Yes, order a replacement", "No, thanks"]
+          and r.card["follow_up_actions"][0]["value"] == "__followup__:replace-card|C-88210|CARD-4417|lost|0")
     r = conv.send("__no__")
     check("No: nothing else changed, no model call", r.message.startswith("OK."))
 
