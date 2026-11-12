@@ -94,7 +94,10 @@ only a few phrases ("it", "that check") count as a reference.
 Built (F-60): warning with Send another / Cancel. Question for Brian: should a second stop
 on the same check be blocked instead of warned? One setting either way.
 
-## 6. New ticket: Retail Check Deposit Status Inquiry (rollover checks)
+## 6. New ticket: Retail Check Deposit Status Inquiry ("Check deposit inquiry")
+
+Update 11/11: renamed from "Rollover check inquiry" - the form covers any check mailed to
+Pershing to be deposited (rollovers are the main case). All lockbox numbers are invented.
 
 **What it is:** a rollover check (for example from a 401(k) at ADP, Voya or Fidelity) is
 mailed to one of Pershing's desks. If the check itself does not carry enough information to
@@ -138,12 +141,12 @@ one. It reads what the advisor wrote, then shows **one form card** laid out like
 with everything it could fill already in and the missing required fields highlighted. Two
 paths are then easy to compare in testing: typing one sentence vs. filling the card.
 
-- **Where:** `tickets/rollover_inquiry.json`, `tools/rollover_inquiry.json`,
-  `skills/service-center/rollover-inquiry/SKILL.md`, `incoming_checks.csv` +
+- **Where:** `tickets/deposit_inquiry.json`, `tools/deposit_inquiry.json`,
+  `skills/service-center/deposit-inquiry/SKILL.md`, `incoming_checks.csv` +
   `MockIncomingChecks`, `core/tickets.py` (precheck: amount, date, tracking # when overnight),
   llm_runtime (look first, then the form card), web/index.html (the form card: dropdowns for
   delivery, destination, lockbox; date field; tracking # shown only for Overnight).
-- **Permissions:** a new action `rollover_inquiry` in entitlements.csv (ALL rows get it).
+- **Permissions:** a new action `deposit_inquiry` in entitlements.csv (ALL rows get it).
 - **Convex:** the ticket uses the existing `tickets` table; deploy needed only for the new
   routing lookups if they move to Convex (mock data stays in CSV). Plan for one deploy.
 - **Tests:** credited -> no ticket; unidentified -> form card prefilled from the received
@@ -156,17 +159,16 @@ paths are then easy to compare in testing: typing one sentence vs. filling the c
 
 - The Misc skill file says plainly what is in and out (see the reorganised skill layout).
   **In:** checkbooks, deposit slips, a deposit not showing, statement requests (re-send,
-  paper / e-statements), fees and fee refunds, signers, account settings, office requests
-  to the service team (with IBD / Office / IP # and no client).
+  paper / e-statements), fees and fee refunds, signers, account settings.
   **Out:** anything not about the account; card actions; stop / copy / address / rollover
   (own tickets); questions like balances or what is on a statement.
 - The routing rules in llm_runtime stop listing "statements" as out of scope (statement
   *requests* are Misc, statement *questions* stay out).
-- Office requests: Misc can be sent with only an IBD / Office / IP # and no client.
+- ~~Office requests with no client~~: removed after review. Every Misc request is for a
+  client; the IBD / Office / IP # stay optional (open question for Ben).
 - All skill files reorganised the same way (description first, then settings, then Covers /
   Doesn't cover / What the ticket contains).
-- **Tests:** checkbook, fee refund, statement re-send -> Misc; office kits -> Misc without a
-  client; "order a new couch" -> out of scope.
+- **Tests:** checkbook, fee refund, statement re-send -> Misc; a deposit not showing -> Misc for the client; "order a new couch" -> out of scope.
 
 ---
 
@@ -177,3 +179,4 @@ paths are then easy to compare in testing: typing one sentence vs. filling the c
 | Brian | Second request for the same check: warn (now) or block? |
 | Ben | Rollover: lockbox list per destination; does received-check data exist to look up? |
 | Ben | Does the NetX360 profile carry the advisor's phone (for item 2 in production)? |
+| Ben | Misc form: what is the IBD / Office / IP # option used for? (Today: optional details on a client's request.) |

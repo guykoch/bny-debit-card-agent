@@ -150,9 +150,6 @@ def callback_problem(cb) -> Optional[str]:
 
 # ---------------------------------------------------------------- the ActionSpecs
 
-OFFICE_CLIENT_NAME = "Office request (no client)"
-
-
 def _account(services, ti):
     if not ti.get("account_id") or not ti.get("client_id"):
         return None
@@ -247,7 +244,7 @@ def _precheck(t):
                                                          "(10 digits, e.g. 212-555-0142).")
                 ti["new_phone"] = p
             ti["new_address"] = lines[:4]
-        if t["tool"] == "rollover_inquiry":
+        if t["tool"] == "deposit_inquiry":
             _clean_rollover(t, ti)
         if t["tool"] == "misc_request":
             if not (ti.get("subject") or "").strip():
@@ -269,8 +266,8 @@ def field(t: dict, fid: str) -> dict:
 
 
 def lockboxes(destination: str) -> list[str]:
-    """Mock lockbox list per desk (tickets/rollover_inquiry.json) until BNY's arrives."""
-    t = template("rollover_inquiry") or {}
+    """Mock lockbox list per desk (tickets/deposit_inquiry.json) until BNY's arrives."""
+    t = template("deposit_inquiry") or {}
     return field(t, "lockbox").get("options_by_destination", {}).get(destination, [])
 
 
@@ -392,7 +389,7 @@ def review(t: dict, ti: dict, client, services, advisor_id: str = "") -> dict:
             key.append(("New phone", ti["new_phone"]))
     if t["tool"] == "misc_request":
         key.append(("Subject", ti.get("subject", "")))
-    if t["tool"] == "rollover_inquiry":
+    if t["tool"] == "deposit_inquiry":
         key.append(("Check", f"Check {ti.get('check_number', '')} · {money(ti.get('amount', ''))}"
                              + (f" from {ti['sent_from']}" if ti.get("sent_from") else "")))
         how = ti.get("delivery_method", "")
@@ -410,7 +407,8 @@ def review(t: dict, ti: dict, client, services, advisor_id: str = "") -> dict:
         "tool": t["tool"], "title": t["title"],
         "form": f"{t['category']} · {t['request']} · {_request_type(t, account)}",
         "key": [{"label": k, "value": v} for k, v in key if v],
-        "editable": {"subject": ti.get("subject", ""),
+        "editable": {"has_subject": bool(field(t, "subject")),
+                     "subject": ti.get("subject", ""),
                      "additional_info": ti.get("additional_info", ""),
                      "callback": ti.get("callback") or {},
                      "subject_required": t["tool"] == "misc_request",
@@ -424,7 +422,7 @@ def review(t: dict, ti: dict, client, services, advisor_id: str = "") -> dict:
         "attachments": {"max": MAX_ATTACHMENTS, "max_mb": 10, "types": "PDF, JPG or PNG",
                         "note": ATTACH_NOTE, "files": ti.get("attachments") or []},
         "can_edit_details": t["tool"] in ("stop_payment", "check_copy", "address_update",
-                                          "rollover_inquiry"),
+                                          "deposit_inquiry"),
     }
 
 

@@ -19,7 +19,7 @@ _DIR = os.path.join(os.path.dirname(__file__), "data")
 ALL_ACTIONS = {"view", "lock_card", "unlock_card", "replace_card",
                "report_lost_stolen", "travel_notice",
                "stop_payment", "check_copy", "address_update", "misc_request",
-               "rollover_inquiry"}
+               "deposit_inquiry"}
 
 
 def _rows(filename: str) -> list[dict]:

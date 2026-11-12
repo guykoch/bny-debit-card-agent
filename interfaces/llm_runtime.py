@@ -142,10 +142,10 @@ ACTION_LABELS = {"lock-card": "Lock the card", "unlock-card": "Unlock the card",
                  # Service Center tickets
                  "stop-payment": "Stop a check", "check-copy": "Request a check copy",
                  "address-update": "Change an address", "misc-request": "Other request (Misc)",
-                 "rollover-inquiry": "Rollover check inquiry",
+                 "deposit-inquiry": "Check deposit inquiry",
                  "check-status": "Look up a check"}
 NOW_ACTIONS = ["lock-card", "unlock-card", "replace-card", "report-lost-stolen", "travel-notice"]
-TICKET_ACTIONS = ["stop-payment", "check-copy", "address-update", "rollover-inquiry",
+TICKET_ACTIONS = ["stop-payment", "check-copy", "address-update", "deposit-inquiry",
                   "misc-request"]
 TICKET_NOTE = "Sends a request to the Service Center. Nothing changes until it is processed."
 
@@ -364,7 +364,9 @@ class GptConversation:
         r"^\s*(?:so\s+)?(?:did|have|has)\s+(?:you|it|anything|that|this)\b.{0,40}\b"
         r"(?:do|done|did|change|changed|run|ran|happen|happened|go through|gone through|work|"
         r"worked|submit|submitted|go|gone|lock|unlock|replace|close|order|add|report|send|cancel|"
-        r"locked|unlocked|replaced|closed|ordered|added|reported|sent|cancelled)\b|^\s*(?:is|was)\s+(?:it|that|this|anything)\s+"
+        r"locked|unlocked|replaced|closed|ordered|added|reported|sent|cancelled)\b|"
+        r"\b(?:recap|summary|summarize|so far)\b.{0,30}\b(?:you|done|did|changed|sent)\b|"
+        r"\bwhat(?:'s| has| have)? (?:been )?(?:done|sent|changed)\b|^\s*(?:is|was)\s+(?:it|that|this|anything)\s+"
         r"(?:done|changed|submitted|processed)\b|\bwhat (?:did|have) you (?:do|done|change)",
         re.I)
 
@@ -374,12 +376,19 @@ class GptConversation:
     def _status_reply(self) -> ToolResponse:
         """P-08: what actually ran in this conversation - from code, never the model."""
         if self.done:
-            msg = "Done in this conversation: " + "; ".join(d["what"] for d in self.done[-5:])
+            # One line per action, as bullets (Guy, 11/11): easy to read at a glance.
+            lines = []
+            for d in self.done[-20:]:
+                what = re.sub(r"\s*It will be processed by the Service Center\.?", "", d["what"]).strip()
+                lines.append(f"• {d['client']}: {what}" if d.get("client") else f"• {what}")
+            msg = "Done in this conversation:\n" + "\n".join(lines)
         else:
             msg = "Nothing has been changed in this conversation yet."
         panel = (self.pending or {}).get("panel")
+        if (self.pending or {}).get("kind") == "options":
+            panel = None              # an offer (e.g. under a looked-up check): not waiting
         if self.pending and self.pending.get("kind") == "confirm":
-            msg += " The card below is waiting for you: nothing runs until you click Confirm."
+            msg += "\n\nThe card below is waiting for you: nothing runs until you click Confirm."
         if panel:
             return ToolResponse(status="needs_input", message=msg,
                                 card={**{k: v for k, v in panel.items() if k != "notice"},
@@ -681,9 +690,6 @@ class GptConversation:
             found = self._client_from_words()
             if isinstance(found, ToolResponse):
                 return found
-            if found is None and skill.name == "misc-request" and any(
-                    (self.task.get("draft") or {}).get(k) for k in ("ibd", "office", "ip")):
-                return self._ticket_step()                   # an office request: no client
             if found is None:
                 return self._ask_client()
             stop = self._set_client(found)
@@ -931,7 +937,9 @@ class GptConversation:
                     return self._reshow(result.message)      # the card stays open
                 self.pending = None
                 if result.status == "ok":
-                    self.done.append({"what": result.message.split("\n")[0]})
+                    who = self.services.clients.get((new_input or p["input"]).get("client_id", ""))
+                    self.done.append({"what": result.message.split("\n")[0],
+                                      "client": who.name if who else ""})
                 self._note(f"the advisor clicked Confirm; result: {result.message}")
                 self.task = None
                 if result.card and result.card.get("follow_up_actions"):
@@ -1360,11 +1368,11 @@ class GptConversation:
             d["additional_info"] = details
             d["subject"] = self._draft_subject(details)
             for kind_, num in re.findall(r"\b(ibd|office|ip)\s*(?:#|number|no\.?)?\s*(\d[\w-]{1,11})\b",
-                                         text, re.I):        # "office 4521": an office request
+                                         text, re.I):        # "office 4521": optional form detail
                 d[kind_.lower()] = num
         elif tool == "find_check" and nums:
             d["check_number"] = nums[0]
-        elif tool == "rollover_inquiry":
+        elif tool == "deposit_inquiry":
             self._rollover_fill(text)
 
     _SUBJECTS = [(r"\b(waive|refund|reverse)\b.*\bfee|\bfee\b.*\b(waive|refund|reverse)", "Fee refund request"),
@@ -1374,8 +1382,7 @@ class GptConversation:
                  (r"\bstatement", "Statement request"),
                  (r"\bsigner", "Authorized signer"),
                  (r"\bdeposit\b", "Deposit not showing"),
-                 (r"overdraft protection", "Overdraft protection"),
-                 (r"account[- ]opening kit|supplies", "Office supplies")]
+                 (r"overdraft protection", "Overdraft protection")]
 
     def _draft_subject(self, details: str) -> str:
         for pat, subject in self._SUBJECTS:               # a short subject for common requests
@@ -1396,7 +1403,7 @@ class GptConversation:
             d["account_id"] = last["account_id"]
             d["checks"] = [{k: last.get(k, "") for k in ("check_number", "amount", "date_written")}]
         office = tool == "misc_request" and any(d.get(k) for k in ("ibd", "office", "ip"))
-        if not cid and not office:
+        if not cid:
             return self._ask_client()
         if not d.get("account_id") and not office:
             r = self._dispatch("list_accounts", {"client_id": cid})
@@ -1421,7 +1428,7 @@ class GptConversation:
                 d["account_id"] = named[0]["account_id"]
             elif len(cand) == 1 and tool != "misc_request":
                 d["account_id"] = cand[0]["account_id"]
-            elif tool in ("address_update", "rollover_inquiry"):   # the client's main account
+            elif tool in ("address_update", "deposit_inquiry"):   # the client's main account
                 main = next((a for a in accts if a["account_type"] == "AMA"), accts[0])
                 d["account_id"] = main["account_id"]
             elif len(cand) == 1 and tool == "misc_request" and len(accts) == 1:
@@ -1436,7 +1443,7 @@ class GptConversation:
                                  f"Which of {client.name}'s accounts is this for?", opts)
         if tool == "find_check":
             return self._check_status()
-        if tool == "rollover_inquiry":
+        if tool == "deposit_inquiry":
             r = self._rollover_step()
             if r is not None:
                 return r
@@ -1471,7 +1478,7 @@ class GptConversation:
                     "next tickets."), "callback")
         return self._ticket_review()
 
-    # ------------------------------------------------------------ rollover check inquiry
+    # ------------------------------------------------------------ check deposit inquiry (rollovers and other incoming checks)
     _SENDERS = ["ADP", "Empower", "Fidelity", "John Hancock", "Principal", "Prudential", "Schwab",
                 "TIAA", "Transamerica", "Vanguard", "Voya"]
     _DESKS = ["Jersey City", "Pittsburgh", "Lake Mary"]
@@ -1500,7 +1507,7 @@ class GptConversation:
         d["additional_info"] = T.redact(text)
 
     def _rollover_fields(self) -> list[dict]:
-        t = T.template("rollover_inquiry")
+        t = T.template("deposit_inquiry")
         out = []
         for f in t["fields"]:
             if f["id"] in ("account_id", "callback"):
@@ -1525,7 +1532,11 @@ class GptConversation:
     def _rollover_form(self, notice: str = "") -> ToolResponse:
         d = self.task["draft"]
         if d.get("destination") and not d.get("lockbox"):
-            d["lockbox"] = (T.lockboxes(d["destination"]) or [""])[0]   # the desk's rollover box
+            boxes = T.lockboxes(d["destination"])               # a rollover goes to the rollover box
+            roll = re.search(r"rollover|roll over|401\(?k\)?|403\(?b\)?|\bira\b|pension",
+                             " ".join(self.task.get("texts") or []), re.I)
+            d["lockbox"] = next((b for b in boxes if ("Rollover" in b) == bool(roll)),
+                                boxes[0] if boxes else "")
         values = {f["id"]: d.get(f["id"], "") for f in self._rollover_fields()}
         acct = self.services.checks.account(d["account_id"]) if d.get("account_id") else None
         missing = self._rollover_missing()
@@ -1748,9 +1759,12 @@ class GptConversation:
         return self._stop(r.message, code or "refused")
 
     def _ticket_edits(self, new_input: dict, extra: dict) -> dict:
-        """Values changed on the review card (subject, details, Call Back #, attachments)."""
+        """Values changed on the review card (subject, details, Call Back #, attachments).
+        Only fields this ticket's form has (the rollover form has no Subject, say)."""
+        from core import schemas
+        props = schemas.load()[self.pending["tool"]]["input_schema"]["properties"]
         for k in ("subject", "additional_info"):
-            if isinstance(extra.get(k), str):
+            if k in props and isinstance(extra.get(k), str):
                 new_input[k] = extra[k][:1000]
         cb = extra.get("callback")
         if isinstance(cb, dict) and cb.get("number"):
@@ -1777,7 +1791,7 @@ class GptConversation:
         if tool == "address_update":
             d["new_address"], d["_typed_address"] = [], ""
             return self._ticket_address_card()
-        if tool == "rollover_inquiry":
+        if tool == "deposit_inquiry":
             d["_form_done"] = False
             return self._rollover_form()
         return self._ticket_review()
@@ -2088,15 +2102,18 @@ class GptConversation:
             "client has or their status, and anything else.\n"
             "- Return unclear when it is about a card action or a ticket but you cannot tell "
             "which one.\n"
-            "- Checks (paper checks) are never debit cards. Stop, cancel or void a check, or a "
+            "- A check mailed to Pershing to be deposited for the client (a rollover, a transfer "
+            "from another bank, any incoming check), or whether it has arrived: deposit-inquiry. "
+            "An electronic deposit not showing (no check mailed to Pershing): misc-request.\n"
+"- Checks (paper checks) are never debit cards. Stop, cancel or void a check, or a "
             "check lost in the mail: stop-payment. A copy or image of a check: check-copy. Was a "
             "check paid, cashed, cleared or drawn: check-status. If the advisor then says that "
             "check was lost, return stop-payment.\n"
             "- A change of the client's address or phone: address-update (a ticket, also when "
-            "they moved). Any other servicing request about a checking account or the "
-            "advisor's office (checkbook, deposit slips, a deposit not showing, re-send a "
-            "statement, paper or e-statements, a fee or fee refund, a signer, account settings, "
-            "office supplies): misc-request. Not about the account at all (a couch, a flight): "
+            "they moved). Any other servicing request about a client's checking account "
+            "(checkbook, deposit slips, a deposit not showing, re-send a "
+            "statement, paper or e-statements, a fee or fee refund, a signer, account settings): "
+            "misc-request. Not about the account at all (a couch, a flight): "
             "none.\n"
             f"- Just discussed: {just}. \"it\", \"that one\" or \"that payment\" refers to it "
             "(e.g. stop that payment -> stop-payment when a check was just discussed).\n"

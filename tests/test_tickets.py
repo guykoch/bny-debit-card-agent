@@ -280,7 +280,7 @@ def run():
           r.status == "awaiting_confirmation" and r.data["input"]["reason"] == "stolen"
           and r.data["input"]["flag_transactions"] is True)
 
-    print("\nF-62  Rollover check inquiry (Retail Check Deposit Status Inquiry)")
+    print("\nF-62 / F-67  Check deposit inquiry (Retail Check Deposit Status Inquiry)")
     svc, conv = fresh(CodeOnly())
     r = conv.send("Has Jane Miller's rollover check from Voya come in yet? It's for $85,000.")
     check("T-62a", "received and credited: says so, no ticket needed",
@@ -292,7 +292,7 @@ def run():
     check("T-62b", "received but not credited: the form card, filled from the received check",
           kind(r) == "rollover_form" and "couldn't be credited" in r.card["info"]
           and r.card["values"]["destination"] == "Pittsburgh"
-          and r.card["values"]["lockbox"] == "Rollover Lockbox-382084"
+          and r.card["values"]["lockbox"] == "Rollover Lockbox-734022"
           and r.card["values"]["amount"] == "142300.00")
     check("T-62b", "missing required fields highlighted",
           r.card["missing"] == ["Method of Delivery", "Date Sent"])
@@ -305,7 +305,7 @@ def run():
     check("T-62b", "then the review card (Account, Check, Sent, Destination, Call Back #)",
           r.status == "awaiting_confirmation" and r.card["ticket"]["title"] == "Check Deposit Status Inquiry"
           and "Retail Check Deposit Status Inq" in r.card["ticket"]["form"]
-          and key(r, "Destination") == "Pittsburgh · Rollover Lockbox-382084")
+          and key(r, "Destination") == "Pittsburgh · Rollover Lockbox-734022")
     r = conv.send("confirm")
     t = svc.tickets.list_for_advisor("ADV-1234")[0]
     check("T-62b", "Send: ticket saved with every form field",
@@ -320,24 +320,38 @@ def run():
           kind(r) == "rollover_form" and "No check matching this has been received" in r.card["info"]
           and r.card["missing"] == [] and r.card["values"]["tracking_number"] == "771233459901"
           and r.card["values"]["date_sent"] == "2026-11-10")
+    check("T-62d", "not a rollover: the desk's retail deposit lockbox (invented demo values)",
+          r.card["values"]["lockbox"] == "Retail Deposit Lockbox-852306")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("A $50,000 check from Jane Miller's old bank was mailed to Pershing in Jersey City, "
+                  "check 8812. Has it come in?")
+    check("T-62f", "any check mailed to Pershing for deposit, not only rollovers",
+          conv.task and conv.task["skill"].name == "deposit-inquiry" and kind(r) == "rollover_form"
+          and r.card["values"]["lockbox"] == "Retail Deposit Lockbox-610274")
+    import json as _j
+    t = _j.load(open(os.path.join(os.path.dirname(__file__), "..", "tickets", "deposit_inquiry.json")))
+    boxes = [b for f in t["fields"] if f["id"] == "lockbox" for v in f["options_by_destination"].values() for b in v]
+    check("T-62g", "no real lockbox numbers in the demo data", "382084" not in " ".join(boxes))
     adv = Session(advisor_id="ADV-1234")
     bad = {"client_id": "C-10344", "account_id": "ACC-1034", "draft_id": "rf", "amount": "100",
            "check_number": "1", "delivery_method": "Regular mail", "date_sent": "2099-01-01",
            "destination": "Lake Mary", "callback": {"kind": "US", "number": "212-555-0142"}}
-    r = dispatch(svc, adv, "rollover_inquiry", bad)
+    r = dispatch(svc, adv, "deposit_inquiry", bad)
     check("T-62e", "a future Date Sent is refused", r.data.get("code") == "rollover_missing")
-    r = dispatch(svc, adv, "rollover_inquiry", {**bad, "date_sent": "2026-11-01",
-                                                "lockbox": "Rollover Lockbox-382084"})
+    r = dispatch(svc, adv, "deposit_inquiry", {**bad, "date_sent": "2026-11-01",
+                                                "lockbox": "Rollover Lockbox-734022"})
     check("T-62e", "a lockbox from another desk is refused", r.data.get("code") == "rollover_missing")
 
-    print("\nF-63  Misc boundary; office requests with no client")
+    print("\nF-63  Misc boundary (every request is for a client)")
+    svc, conv = fresh(CodeOnly())
+    r = conv.send("Robert Castellano's $5,000 deposit from last Tuesday still isn't showing on his AMA account.")
+    check("T-63a", "a deposit not showing: Misc for the client, AMA named in the message",
+          r.status == "awaiting_confirmation" and key(r, "Account") == "AMA ...1022"
+          and r.card["ticket"]["editable"]["subject"] == "Deposit not showing")
     svc, conv = fresh(CodeOnly())
     r = conv.send("Send a request to the service team: office 4521 needs 20 account-opening kits.")
-    check("T-63a", "office request: no client asked, Office # 4521 on the review card",
-          r.status == "awaiting_confirmation" and key(r, "Account") == "Office # 4521"
-          and key(r, "Client") == "Office request (no client)")
-    r = conv.send("confirm")
-    check("T-63a", "and sent", r.status == "ok")
+    check("T-63a", "every Misc request is for a client: no client named -> 'Which client?'",
+          kind(r) == "client_input")
     svc, conv = fresh(CodeOnly())
     r = conv.send("Order a new checkbook for Jane Miller's Resource Checking account, starting at check 2101.")
     check("T-63b", "the account named in the message is used (no 'Which account?')",
@@ -353,6 +367,43 @@ def run():
     r = conv.send("Can you order a new couch for our office lobby?")
     check("T-63d", "not about the account: out of scope, nothing created",
           "I can help with" in r.message and conv.task is None)
+
+    print("\nF-66  Send from the page (confirm_with) works for every ticket type")
+    def page_send(conv, r):
+        ed = r.card["ticket"]["editable"]
+        extra = {"additional_info": ed["additional_info"] or "details", "callback": ed["callback"],
+                 "attachments": []}
+        if ed.get("has_subject", True):
+            extra["subject"] = ed["subject"] or "Request"
+        return conv.send("confirm_with:" + json.dumps(extra))
+    cases = [("stop_payment", ["Stop payment on Jane Miller's check 1043"]),
+             ("check_copy", ["Request a copy of check 1042 for Jane Miller."]),
+             ("address_update", ["Jane Miller moved, change her address",
+                                 "ticket_address:" + json.dumps({"pick": address_lookup.suggest(
+                                     "1100 Congress")["suggestions"][0]["id"], "unit": "", "phone": ""})]),
+             ("misc_request", ["Order a new checkbook for Jane Miller's AMA account"]),
+             ("deposit_inquiry", ["Retail check deposit status inquiry for Priya Raghunathan: check "
+                                   "55120, $300,000.00 from ADP, sent overnight 11/10/2026, tracking "
+                                   "7712 3345 9901, to Lake Mary.", "__form__"])]
+    for tool, msgs in cases:
+        svc, conv = fresh(CodeOnly())
+        for m in msgs:
+            r = conv.send("rollover_form:" + json.dumps(r.card["values"]) if m == "__form__" else m)
+        r = page_send(conv, r)
+        check("T-66a", f"{tool}: Send with the page's fields saves the ticket",
+              r.status == "ok" and r.data.get("ticket_id", "").startswith("SR-"), r.message[:80])
+
+    print("\nF-65  'What did you do so far?': one bullet per action")
+    svc, conv = fresh(CodeOnly())
+    conv.send("Lock Jane Miller's card"); conv.send("confirm")
+    conv.send("Stop payment on Jane Miller's check 1043"); conv.send("confirm")
+    r = conv.send("what did you do so far?")
+    check("T-65a", "a heading, then one line per action with the client's name",
+          r.message.split("\n") == ["Done in this conversation:",
+                                     "• Jane Miller: Card ending 4417 is locked.",
+                                     "• Jane Miller: Stop a check request SR-10234 sent."])
+    r = conv.send("can you give me a recap of what you did?")
+    check("T-65a", "other phrasings too (recap)", r.message.startswith("Done in this conversation:"))
 
     print("\nF-59  Active Tickets: View an attachment")
     a2a_server.reset_memory()

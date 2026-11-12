@@ -1,8 +1,8 @@
 {
-  "name": "rollover_inquiry",
+  "name": "deposit_inquiry",
   "access": "write",
   "ticket": true,
-  "description": "Send a Retail Check Deposit Status Inquiry (rollover check) to the Service Center, so the money desk can match and credit the check. Nothing else changes.",
+  "description": "Send a Retail Check Deposit Status Inquiry to the Service Center for a check mailed to Pershing to be deposited into the client's account (a rollover, a transfer, any incoming check), so the desk can match and credit it. Nothing else changes.",
   "input_schema": {
     "type": "object",
     "properties": {

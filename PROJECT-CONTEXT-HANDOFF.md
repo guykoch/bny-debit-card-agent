@@ -922,7 +922,9 @@ GPT-5.4 mode does not use any of this.
   look-up answers "Paid" / "Not paid yet" first.
 - Linked requests: `last_check` + `last_topic` let "stop that payment" refer to the check just
   discussed (always a one-tap confirm). Lost/stolen follow-up keeps client and card.
-- New ticket: Rollover check inquiry (Retail Check Deposit Status Inquiry), looks first at
-  `incoming_checks.csv`; one prefilled form card. Lockboxes are mock values.
-- Misc: boundary in the skill file, office requests with no client, short subjects.
+- New ticket: Check deposit inquiry (Retail Check Deposit Status Inquiry; any check mailed to
+  Pershing, rollovers the main case; tool `deposit_inquiry`), looks first at
+  `incoming_checks.csv`; one prefilled form card. Lockboxes are invented demo values.
+- Misc: boundary in the skill file, short subjects. Every Misc request is for a client (an
+  office-only request was tried and removed).
 - Tests: 11 suites, all passing (`tests/test_tickets.py` 72 checks).

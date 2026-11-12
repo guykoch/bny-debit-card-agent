@@ -96,9 +96,6 @@ class MockClientDirectory:
 
 
 class MockEntitlementService:
-    def known_advisor(self, advisor_id: str) -> bool:
-        return advisor_id in data.GRANTS
-
     def can(self, advisor_id: str, client_id: str, action: str) -> bool:
         granted = data.GRANTS.get(advisor_id, {}).get(client_id)
         if granted is None:

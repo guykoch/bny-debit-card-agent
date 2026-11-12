@@ -126,7 +126,7 @@ def _check_volume(session, tool_name: str) -> None:
                 "check_copy": "requested {n} check copies", "misc_request": "sent {n} requests",
                 "report_lost_stolen": "reported {n} cards lost or stolen",
                 "address_update": "sent {n} address updates",
-                "rollover_inquiry": "sent {n} deposit status inquiries"}.get(tool_name, "made {n} changes")
+                "deposit_inquiry": "sent {n} deposit status inquiries"}.get(tool_name, "made {n} changes")
         raise NotPossible(
             "volume_limit",
             f"You have {what.format(n=done)} in the last {settings.VOLUME_WINDOW_MINUTES} "
@@ -219,27 +219,17 @@ def _write(services, session, tool_name, ti, confirmed) -> ToolResponse:
     spec = ACTIONS[tool_name]
     client_id = ti.get("client_id") or ""
     card_id = ti.get("card_id")
-    # A Misc request for the advisor's office (IBD / Office / IP #) has no client.
-    office_only = (tool_name == "misc_request" and not client_id
-                   and any(ti.get(k) for k in ("ibd", "office", "ip")))
-    if not client_id and not office_only:
+    if not client_id:                   # every request is for one of the advisor's clients
         raise BadRequest("Which client is this for?")
 
     # 1. entitlement
     # The audit records which side checked (setting in config/settings.py).
     checked_by = _checked_by()
-    if not settings.TRUST_UPSTREAM_ENTITLEMENT and not office_only:
+    if not settings.TRUST_UPSTREAM_ENTITLEMENT:
         if not services.entitlements.can(session.advisor_id, client_id, tool_name):
             raise NotEntitled()
-    if office_only and not getattr(services.entitlements, "known_advisor", lambda a: True)(
-            session.advisor_id):
-        raise NotEntitled()
 
-    if office_only:
-        from core.models import Client
-        from core.tickets import OFFICE_CLIENT_NAME
-        target = Client(client_id="", name=OFFICE_CLIENT_NAME, account_last4="")
-    elif spec.client_level:
+    if spec.client_level:
         # Acts on the client, not a card (Service Center tickets).
         target = services.clients.get(client_id)
         if target is None:

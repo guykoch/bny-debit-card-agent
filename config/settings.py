@@ -83,7 +83,7 @@ PENDING_CARD_ACTIONS = {"lock_card", "replace_card"}
 VOLUME_LIMITS = {"replace_card": 5, "report_lost_stolen": 5,
                  # Service Center tickets (per advisor, per window)
                  "stop_payment": 10, "check_copy": 10, "address_update": 5, "misc_request": 10,
-                 "rollover_inquiry": 10}
+                 "deposit_inquiry": 10}
 VOLUME_WINDOW_MINUTES = 10
 
 

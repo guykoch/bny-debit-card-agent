@@ -6,8 +6,8 @@ card and send Service Center tickets.
 - **Do it now** (changes the card): lock, unlock, replace, report lost or stolen,
   travel notice.
 - **Send a ticket** (saves a request for the Service Center, nothing else
-  changes): Stop a check (Stop Payment), Check Copy, Address Update, Rollover check
-  inquiry (Retail Check Deposit Status Inquiry), Misc. Plus a read-only check look-up
+  changes): Stop a check (Stop Payment), Check Copy, Address Update, Check deposit
+  inquiry (Retail Check Deposit Status Inquiry: a rollover or any check mailed to Pershing), Misc. Plus a read-only check look-up
   ("Did check 1043 clear?").
 
 A card is never closed on its own: a close request gets a fixed reply with
